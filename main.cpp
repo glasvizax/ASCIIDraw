@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string>
 #include <iostream>
+#include <xm/xm.h>
 
 struct Framebuffer 
 {
@@ -23,29 +24,9 @@ struct Framebuffer
     }
 };
 
-struct vec2
-{
-    float x;
-    float y;
-};
-
-struct vec3
-{
-    float x;
-    float y;
-    float z;
-};
-
-struct vec4
-{
-    float x;
-    float y;
-    float z;
-    float w;
-};
-
 void clearBuffer();
-void pushPixel(char symbol, vec2 pos);
+void pushPixel(char symbol, xm::ivec2 pos);
+void pushLine(char symbol, xm::ivec2 a, xm::ivec2 b);
 void draw();
 
 Framebuffer g_main_framebuffer;
@@ -59,9 +40,9 @@ int main(int argc, char* argv[])
     {
         clearBuffer();
 
-        pushPixel('b', vec2{ 1, 1 });
-        pushPixel('b', vec2{ 2, 2 });
-        pushPixel('b', vec2{ 3, 3 });
+        pushPixel('b', xm::ivec2{ 1, 1 });
+        pushPixel('b', xm::ivec2{ 2, 2 });
+        pushPixel('b', xm::ivec2{ 3, 3 });
 
         draw();
     }
@@ -80,7 +61,7 @@ void clearBuffer()
     }
 }
 
-void pushPixel(char symbol, vec2 pos)
+void pushPixel(char symbol, xm::ivec2 pos)
 {
     size_t y = g_main_framebuffer.size_y - 1 - pos.y;
     size_t idx = y * g_main_framebuffer.size_x + pos.x;
