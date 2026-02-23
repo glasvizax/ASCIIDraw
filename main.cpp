@@ -55,12 +55,15 @@ struct Window
 
 };
 
-
 void clearBuffer();
 void pushPixel(char symbol, xm::vec2 pos);
 void pushLine(char symbol, xm::vec2 a, xm::vec2 b);
+void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c);
+
 void pushPixelRaw(char symbol, xm::uvec2 pos);
 void pushLineRaw(char symbol, xm::ivec2 a, xm::ivec2 b);
+void pushTriangleScanlineRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 c);
+
 void draw();
 
 inline xm::uvec2 NDCtoPixelu(xm::vec2 pos);
@@ -86,17 +89,16 @@ int main(int argc, char* argv[])
     while (true)
     {
         clearBuffer();
-        //xm::ivec2 a(0, 0);
-        //xm::ivec2 b(50, 50);
-        //xm::ivec2 c(100, 62);
 
-        xm::vec2 a(-1.0f, -1.0f);
-        xm::vec2 b(0.0f, -1.0f);
-        xm::vec2 c(0.0f, 0.0f);
+        xm::vec2 a(-0.5f, -0.5f);
+        xm::vec2 b(0.0f, 0.0f);
+        xm::vec2 c(-0.5f, 0.0f);
 
-        pushLine('.', a, b);
-        pushLine('.', c, b);
-        pushLine('.', a, c);
+        pushTriangle('.', a, b, c);
+
+        //pushLineRaw('.', a, b);
+        //pushLineRaw('.', c, b);
+        //pushLineRaw('.', a, c);
 
         draw();
     }
@@ -109,6 +111,7 @@ void clearBuffer()
     std::memset((void*)g_main_framebuffer.m_buffer.c_str(), g_clear_symbol, g_main_framebuffer.m_buff_size);
 }
 
+
 void pushLine(char symbol, xm::vec2 a, xm::vec2 b)
 {
     pushLineRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b));
@@ -119,6 +122,11 @@ void pushPixel(char symbol, xm::vec2 pos)
     pushPixelRaw(symbol, NDCtoPixelu(pos));
 }
 
+void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c) 
+{
+    pushTriangleScanlineRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c));
+}
+
 inline xm::uvec2 NDCtoPixelu(xm::vec2 pos)
 {
     return xm::uvec2(g_main_window.m_size.x * (pos.x + 1.0f) / 2.0f, g_main_window.m_size.y * (pos.y + 1.0f) / 2.0f);
@@ -127,6 +135,78 @@ inline xm::uvec2 NDCtoPixelu(xm::vec2 pos)
 inline xm::ivec2 NDCtoPixeli(xm::vec2 pos)
 {
     return xm::ivec2(g_main_window.m_size.x * (pos.x + 1.0f) / 2.0f, g_main_window.m_size.y * (pos.y + 1.0f) / 2.0f);
+}
+
+void pushTriangleScanlineRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 c)
+{
+    if(a.y > b.y)
+    {
+        swap(a, b);
+    }
+    if(b.y > c.y)
+    {
+        swap(b, c);
+    }
+    if (a.y > b.y)
+    {
+        swap(a, b);
+    }
+    if (a.y != b.y) 
+    {
+        for (int y = a.y; y <= b.y; ++y)
+        {
+            float t1 = (y - a.y) / static_cast<float>(c.y - a.y);
+            float t2 = (y - a.y) / static_cast<float>(b.y - a.y);
+
+            uint x1 = std::round(a.x + t1 * (c.x - a.x));
+            uint x2 = std::round(a.x + t2 * (b.x - a.x));
+
+            if (x1 > x2)
+            {
+                std::swap(x1, x2);
+            }
+
+            for (uint x = x1; x <= x2; ++x)
+            {
+                pushPixelRaw(symbol, xm::uvec2(x, y));
+            }
+        }
+    }
+    else 
+    {
+        for (uint x = a.x; x <= b.x; ++x)
+        {
+            pushPixelRaw(symbol, xm::uvec2(x, a.y));
+        }
+    }
+    if (b.y != c.y) 
+    {
+        for (int y = b.y + 1; y <= c.y; ++y)
+        {
+            float t1 = (y - a.y) / static_cast<float>(c.y - a.y);
+            float t2 = (y - b.y) / static_cast<float>(c.y - b.y);
+
+            uint x1 = std::round(a.x + t1 * (c.x - a.x));
+            uint x2 = std::round(b.x + t2 * (c.x - b.x));
+
+            if (x1 > x2)
+            {
+                std::swap(x1, x2);
+            }
+
+            for (uint x = x1; x <= x2; ++x)
+            {
+                pushPixelRaw(symbol, xm::uvec2(x, y));
+            }
+        }
+    }
+    else
+    {
+        for (uint x = b.x; x <= c.x; ++x)
+        {
+            pushPixelRaw(symbol, xm::uvec2(x, b.y));
+        }
+    }
 }
 
 
