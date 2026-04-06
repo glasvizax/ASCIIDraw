@@ -6,15 +6,20 @@
 
 #include <xm/xm.h>
 
+#include "ParticlesEngine.h"
+#include "Platform.h"
+
+#include <algorithm>
+
 using uint = unsigned int;
 
 struct Framebuffer 
 {
     std::string m_buffer;
-    xm::uvec2 m_size;
+    xm::ivec2 m_size;
     uint32_t m_buff_size;
 
-    void init(xm::uvec2 size) 
+    void init(xm::ivec2 size) 
     {
         m_size = size;
         m_buff_size = m_size.x * m_size.y;
@@ -24,7 +29,7 @@ struct Framebuffer
 
 struct Window 
 {
-    xm::uvec2 m_size{ 200, 125 };
+    xm::ivec2 m_size{ 200, 125 };
 
     void init() 
     {
@@ -60,13 +65,13 @@ void pushPixel(char symbol, xm::vec2 pos);
 void pushLine(char symbol, xm::vec2 a, xm::vec2 b);
 void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c);
 
-void pushPixelRaw(char symbol, xm::uvec2 pos);
+void pushPixelRaw(char symbol, xm::ivec2 pos);
 void pushLineRaw(char symbol, xm::ivec2 a, xm::ivec2 b);
 void pushTriangleScanlineRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 c);
 
 void draw();
 
-inline xm::uvec2 NDCtoPixelu(xm::vec2 pos);
+//inline xm::uvec2 NDCtoPixelu(xm::vec2 pos);
 inline xm::ivec2 NDCtoPixeli(xm::vec2 pos);
 
 template <uint8_t N, typename T>
@@ -79,29 +84,58 @@ void swap(xm::vector<N, T>& a, xm::vector<N, T>& b)
 
 Window g_main_window;
 Framebuffer g_main_framebuffer;
-char g_clear_symbol = '#';
+char g_clear_symbol = ' ';
+
+ParticlesEngine g_particles_engine;
 
 int main(int argc, char* argv[])
 {
     g_main_window.init();
     g_main_framebuffer.init(g_main_window.m_size);
-    
-    while (true)
+    std::atomic<bool> stop{ false };
+
+    g_particles_engine.init(10 / 1000.0f, 20 / 1000.0f, 2, g_main_window.m_size.x - 2, 2, g_main_window.m_size.y - 2);
+
+    auto last_time = std::chrono::steady_clock::now();
+    bool first = true;
+    int delta_accum = 0;
+
+    while (!stop)
     {
         clearBuffer();
 
-        xm::vec2 a(-0.5f, -0.5f);
-        xm::vec2 b(0.0f, 0.0f);
-        xm::vec2 c(-0.5f, 0.0f);
+        //xm::vec2 a(-0.5f, -0.5f);
+        //xm::vec2 b(0.0f, 0.0f);
+        //xm::vec2 c(0.0f, -0.25f);
 
-        pushTriangle('.', a, b, c);
+        auto time = std::chrono::steady_clock::now();
+        auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(time - last_time);
+        last_time = time;
+        delta_accum += delta.count();
 
-        //pushLineRaw('.', a, b);
-        //pushLineRaw('.', c, b);
-        //pushLineRaw('.', a, c);
+        g_particles_engine.update(delta.count());
+
+        g_particles_engine.render();
+
+        if(delta_accum > 2000.0f && first)
+        {
+            g_particles_engine.onClick(g_main_window.m_size.x / 2, g_main_window.m_size.y / 2);
+            first = false;
+        }
+
+
+        //pushTriangle('.', a, b, c);
+
+        //pushLine('.', b, a);
+
+        //pushLine('.', a, b);
+        //pushLine('.', c, b);
+        //pushLine('.', a, c);
 
         draw();
     }
+
+    g_particles_engine.destroy();
 
     return 0;
 }
@@ -111,7 +145,6 @@ void clearBuffer()
     std::memset((void*)g_main_framebuffer.m_buffer.c_str(), g_clear_symbol, g_main_framebuffer.m_buff_size);
 }
 
-
 void pushLine(char symbol, xm::vec2 a, xm::vec2 b)
 {
     pushLineRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b));
@@ -119,7 +152,7 @@ void pushLine(char symbol, xm::vec2 a, xm::vec2 b)
 
 void pushPixel(char symbol, xm::vec2 pos)
 {
-    pushPixelRaw(symbol, NDCtoPixelu(pos));
+    pushPixelRaw(symbol, NDCtoPixeli(pos));
 }
 
 void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c) 
@@ -127,10 +160,11 @@ void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c)
     pushTriangleScanlineRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c));
 }
 
-inline xm::uvec2 NDCtoPixelu(xm::vec2 pos)
+/*
+inline xm::ivec2 NDCtoPixelu(xm::vec2 pos)
 {
-    return xm::uvec2(g_main_window.m_size.x * (pos.x + 1.0f) / 2.0f, g_main_window.m_size.y * (pos.y + 1.0f) / 2.0f);
-}
+    return xm::ivec2(g_main_window.m_size.x * (pos.x + 1.0f) / 2.0f, g_main_window.m_size.y * (pos.y + 1.0f) / 2.0f);
+}*/
 
 inline xm::ivec2 NDCtoPixeli(xm::vec2 pos)
 {
@@ -143,74 +177,94 @@ void pushTriangleScanlineRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 c)
     {
         swap(a, b);
     }
-    if(b.y > c.y)
+
+    if (b.y > c.y)
     {
         swap(b, c);
     }
+
     if (a.y > b.y)
     {
         swap(a, b);
     }
+    
     if (a.y != b.y) 
     {
         for (int y = a.y; y <= b.y; ++y)
         {
-            float t1 = (y - a.y) / static_cast<float>(c.y - a.y);
-            float t2 = (y - a.y) / static_cast<float>(b.y - a.y);
+            float t1 = (y - a.y) / static_cast<float>(b.y - a.y);
+            float t2 = (y - a.y) / static_cast<float>(c.y - a.y);
 
-            uint x1 = std::round(a.x + t1 * (c.x - a.x));
-            uint x2 = std::round(a.x + t2 * (b.x - a.x));
+            int x1 = std::round(a.x + t1 * (b.x - a.x));
+            int x2 = std::round(a.x + t2 * (c.x - a.x));
 
-            if (x1 > x2)
+            if(x1 > x2)
             {
                 std::swap(x1, x2);
             }
 
-            for (uint x = x1; x <= x2; ++x)
+            for(int x = x1; x <= x2; ++x)
             {
-                pushPixelRaw(symbol, xm::uvec2(x, y));
+                pushPixelRaw(symbol, xm::ivec2(x, y));
             }
         }
     }
     else 
     {
-        for (uint x = a.x; x <= b.x; ++x)
+        
+        int x1 = a.x;
+        int x2 = b.x;
+
+        if (x1 > x2)
         {
-            pushPixelRaw(symbol, xm::uvec2(x, a.y));
+            std::swap(x1, x2);
         }
+        for (int x = x1; x <= x2; ++x)
+        {
+            pushPixelRaw(symbol, xm::ivec2(x, a.y));
+        }
+        
     }
-    if (b.y != c.y) 
-    {
+    if (b.y != c.y) {
         for (int y = b.y + 1; y <= c.y; ++y)
         {
-            float t1 = (y - a.y) / static_cast<float>(c.y - a.y);
-            float t2 = (y - b.y) / static_cast<float>(c.y - b.y);
+            float t1 = (y - b.y) / static_cast<float>(c.y - b.y);
+            float t2 = (y - a.y) / static_cast<float>(c.y - a.y);
 
-            uint x1 = std::round(a.x + t1 * (c.x - a.x));
-            uint x2 = std::round(b.x + t2 * (c.x - b.x));
+            int x1 = std::round(b.x + t1 * (c.x - b.x));
+            int x2 = std::round(a.x + t2 * (c.x - a.x));
 
             if (x1 > x2)
             {
                 std::swap(x1, x2);
             }
 
-            for (uint x = x1; x <= x2; ++x)
+            for (int x = x1; x <= x2; ++x)
             {
-                pushPixelRaw(symbol, xm::uvec2(x, y));
+                pushPixelRaw(symbol, xm::ivec2(x, y));
             }
         }
     }
     else
     {
-        for (uint x = b.x; x <= c.x; ++x)
+        
+        int x1 = c.x;
+        int x2 = b.x;
+
+        if (x1 > x2)
         {
-            pushPixelRaw(symbol, xm::uvec2(x, b.y));
+            std::swap(x1, x2);
         }
+        for (int x = x1; x <= x2; ++x)
+        {
+            pushPixelRaw(symbol, xm::ivec2(x, a.y));
+        }
+        
     }
+
 }
 
-
-void pushPixelRaw(char symbol, xm::uvec2 pos)
+void pushPixelRaw(char symbol, xm::ivec2 pos)
 {
     size_t y = g_main_framebuffer.m_size.y - 1 - pos.y;
     size_t idx = y * g_main_framebuffer.m_size.x + pos.x;
@@ -219,36 +273,39 @@ void pushPixelRaw(char symbol, xm::uvec2 pos)
 
 void pushLineRaw(char symbol, xm::ivec2 a, xm::ivec2 b)
 {
-    bool steep = std::abs(a.x - b.x) < std::abs(a.y - b.y);
-    if (steep) { 
+    bool steep = std::abs(b.y - a.y) > std::abs(b.x - a.x);
+
+    if (steep) 
+    {
         std::swap(a.x, a.y);
         std::swap(b.x, b.y);
     }
 
-    if (a.x > b.x)
+    if(a.x > b.x)
     {
         swap(a, b);
     }
 
     int y = a.y;
-    float error = 0;
-    int ierror = 0;
-    for(uint x = a.x; x <= b.x; ++x)
+    int err = 0;
+    for (int x = a.x; x <= b.x; ++x) 
     {
-        if (steep)
+        if(steep)
         {
-            pushPixelRaw(symbol, xm::uvec2(y, x));
+            pushPixelRaw(symbol, xm::ivec2(y, x));
         }
         else
         {
-            pushPixelRaw(symbol, xm::uvec2(x, y));
+            pushPixelRaw(symbol, xm::ivec2(x, y));
         }
-        
-        ierror += 2 * std::abs(b.y - a.y);
-        y += (b.y > a.y ? 1 : -1) * (ierror > (b.x - a.x));
-        ierror -= 2 * (b.x - a.x) * (ierror > (b.x - a.x));
-    }
 
+        err += 2 * std::abs(b.y - a.y);
+        if (err > (b.x - a.x))
+        {
+            y += b.y > a.y ? 1 : -1;
+            err -= 2 * (b.x - a.x);
+        }
+    }
 }
 
 void draw()
@@ -259,4 +316,17 @@ void draw()
     {
         std::cout.write(&g_main_framebuffer.m_buffer[y * g_main_framebuffer.m_size.x], g_main_framebuffer.m_size.x);
     }
+}
+
+void platform::drawPoint(float x, float y, float r, float g, float b, float a)
+{
+    float brightness = (r + g + b) / 3.0f;
+    brightness *= a;
+
+    int idx = static_cast<int>(brightness * 9);
+    idx = std::clamp(idx, 0, 9);
+
+    char c = " .:-=+*#%@"[idx];
+
+    pushPixelRaw(c, xm::ivec2(x, y));
 }
