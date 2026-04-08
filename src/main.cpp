@@ -84,7 +84,16 @@ void swap(xm::vector<N, T>& a, xm::vector<N, T>& b)
 
 Window g_main_window;
 Framebuffer g_main_framebuffer;
-char g_clear_symbol = ' ';
+
+char g_intensity_symbols[] = " .:-=+*#%@";
+int g_intensity_symbols_size = sizeof(g_intensity_symbols) - 1;
+char g_clear_symbol = g_intensity_symbols[0];
+
+char getInesitySymbol(float intesity) 
+{
+    int idx = ((g_intensity_symbols_size - 1) * intesity) + 0.5f;
+    return g_intensity_symbols[std::clamp(idx, 0, g_intensity_symbols_size - 1)];
+}
 
 ParticlesEngine g_particles_engine;
 
@@ -119,7 +128,7 @@ int main(int argc, char* argv[])
 
         if(delta_accum > 2000.0f && first)
         {
-            g_particles_engine.onClick(g_main_window.m_size.x / 2, g_main_window.m_size.y / 2);
+            g_particles_engine.generateBurst(g_main_window.m_size.x / 2, g_main_window.m_size.y / 2);
             first = false;
         }
 
@@ -320,13 +329,9 @@ void draw()
 
 void platform::drawPoint(float x, float y, float r, float g, float b, float a)
 {
-    float brightness = (r + g + b) / 3.0f;
-    brightness *= a;
-
-    int idx = static_cast<int>(brightness * 9);
-    idx = std::clamp(idx, 0, 9);
-
-    char c = " .:-=+*#%@"[idx];
-
-    pushPixelRaw(c, xm::ivec2(x, y));
+    float intensity = (r + g + b) / 3.0f;
+    intensity *= a;
+    
+    char symbol = getInesitySymbol(intensity);
+    pushPixelRaw(symbol, xm::ivec2(x, y));
 }

@@ -3,6 +3,7 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <algorithm>
 
 using uint = unsigned int;
 
@@ -37,6 +38,10 @@ struct RenderState
 class ParticlesEngine
 {
 	static inline constexpr float CHANCE_TO_GENERATE_BURST = 0.05f;
+	static float chanceToGenerateBurstMultiplier(uint total_back_size)
+	{
+		return std::clamp(150 / static_cast<float>(total_back_size), 0.0f, 2.0f);
+	}
 	static inline constexpr float CHANCE_NOT_TO_DIE = 0.33f;
 	static inline constexpr float MIN_RGB_SUM = 1.5f;
 	static inline constexpr uint PARTICLE_LIVE_TIME = 4000;
@@ -59,8 +64,8 @@ public:
 	// call to draw particles
 	void render();
 
-	// call on click, x/y - click position
-	void onClick(int x, int y);
+	// call to generate burst, x/y - burst positions
+	void generateBurst(int x, int y);
 
 	// call on destroy
 	void destroy();
@@ -68,9 +73,9 @@ public:
 private:
 	void workerThread();
 
-	void pushClickEvent(int x, int y);
+	void pushBurstEvent(int x, int y);
 
-	void popClickEvents(int available);
+	void popBurstEvents(int available);
 
 private:
 	std::atomic<uint> m_time;

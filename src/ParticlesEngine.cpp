@@ -5,10 +5,10 @@
 
 #include "Platform.h"
 
-constexpr float HALF_FREE_FALL = (9.8f * 20.0f) / (2.0f * 1000.0f * 1000.0f); // ms, 1 meter = 20 px
+constexpr float HALF_FREE_FALL = (9.8f * 40.0f) / (2.0f * 1000.0f * 1000.0f); // ms, 1 meter = 20 px
 constexpr float PI = 3.141592653f;
 
-void ParticlesEngine::pushClickEvent(int x, int y)
+void ParticlesEngine::pushBurstEvent(int x, int y)
 {
 	BurstEvent click_event;
 	click_event.x = x;
@@ -27,7 +27,7 @@ void ParticlesEngine::pushClickEvent(int x, int y)
 	}
 }
 
-void ParticlesEngine::popClickEvents(int available)
+void ParticlesEngine::popBurstEvents(int available)
 {
 	int curr = m_click_events_push.load();
 	int prev = m_click_events_pop.load();
@@ -63,7 +63,7 @@ void ParticlesEngine::init(float min_v0, float max_v0, int min_x, int max_x, int
 	m_min_v0 = min_v0;
 	m_max_v0 = max_v0;
 	std::thread workerThread(&ParticlesEngine::workerThread, this);
-	workerThread.detach(); // Glut + MSVC = join hangs in atexit()	
+	workerThread.detach();
 }
 
 void ParticlesEngine::update(int dt)
@@ -79,33 +79,12 @@ void ParticlesEngine::render()
 	{
 		RenderParticle p = m_render_particles[rs.buffer_idx][i];
 		platform::drawPoint(p.x, p.y, p.r, p.g, p.b, p.a);
-		/*
-		int offset = 2;
-
-		if (p.x > 200 || p.x < 0)
-		{
-			std::cerr << "pushPixelRaw1\n";
-		}
-
-		if (p.y > 125 || p.y < 0)
-		{
-			std::cerr << "pushPixelRaw2\n";
-		}
-
-		float r = std::max(0.0f, p.r - 0.2f);
-		float g = std::max(0.0f, p.g - 0.2f);
-		float b = std::max(0.0f, p.b - 0.2f);
-
-		// тень только вниз-вправо (как от света сверху)
-		platform::drawPoint(p.x + offset, p.y + offset, r, g, b, p.a);
-		platform::drawPoint(p.x + offset + 1, p.y + offset, r, g, b, p.a);
-		*/
 	}
 }
 
-void ParticlesEngine::onClick(int x, int y)
+void ParticlesEngine::generateBurst(int x, int y)
 {
-	pushClickEvent(x, y);
+	pushBurstEvent(x, y);
 }
 
 void ParticlesEngine::destroy()
@@ -184,7 +163,7 @@ void ParticlesEngine::workerThread()
 						if (_back_buffer[i].lived >= PARTICLE_LIVE_TIME)
 						{
 							float prob1 = prob_dist(gen);
-							if (prob1 <= CHANCE_TO_GENERATE_BURST)
+							if (prob1 <= (CHANCE_TO_GENERATE_BURST * chanceToGenerateBurstMultiplier(total_back_size)))
 							{
 								int x = static_cast<int>(_back_buffer[i].x);
 								int y = static_cast<int>(_back_buffer[i].y);
@@ -205,15 +184,6 @@ void ParticlesEngine::workerThread()
 								continue;
 							}
 						}
-						if (_back_buffer[i].x >= _max_x || _back_buffer[i].x <= _min_x)
-						{
-							continue;
-						}
-
-						if (_back_buffer[i].y >= _max_y || _back_buffer[i].y <= _min_y)
-						{
-							continue;
-						}
 
 						Particle p = _back_buffer[i];
 						uint current_delta = 0;
@@ -224,11 +194,25 @@ void ParticlesEngine::workerThread()
 						}
 						else
 						{
+							float rand_x_div = (prob_dist(gen) - 0.5f) * 1.5f;
+							float rand_y_div = (prob_dist(gen) - 0.5f) * 1.5f;
+
 							current_delta = time - p.prev_last_time;
-							p.x = p.x + p.vx0 * current_delta;
-							p.y = p.y + current_delta * (p.vy0 - HALF_FREE_FALL * current_delta);
+							p.x = p.x + p.vx0 * current_delta + rand_x_div;
+							p.y = p.y + current_delta * (p.vy0 - HALF_FREE_FALL * current_delta) + rand_y_div;
 							p.lived = p.lived + current_delta;
 						}
+
+						if (p.x > _max_x || p.x < _min_x)
+						{
+							continue;
+						}
+
+						if (p.y > _max_y || p.y < _min_y)
+						{
+							continue;
+						}
+
 						p.prev_last_time = time;
 
 						uint write_idx = _front_buffer_size.fetch_add(1);
@@ -243,12 +227,12 @@ void ParticlesEngine::workerThread()
 					}
 				}
 			);
-			popClickEvents(MAX_BURSTS_BUFFER_SIZE - m_bursts_buffer_size.load());
+			popBurstEvents(MAX_BURSTS_BUFFER_SIZE - m_bursts_buffer_size.load());
 			executor.wait();
 		}
 		else
 		{
-			popClickEvents(MAX_BURSTS_BUFFER_SIZE - m_bursts_buffer_size.load());
+			popBurstEvents(MAX_BURSTS_BUFFER_SIZE - m_bursts_buffer_size.load());
 		}
 
 		uint old_front_buffer_size = m_particles_sizes[front_buffer_idx].load();
