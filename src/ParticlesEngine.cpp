@@ -54,7 +54,7 @@ void ParticlesEngine::popBurstEvents(int available)
 	}
 }
 
-void ParticlesEngine::init(float min_v0, float max_v0, int min_x, int max_x, int min_y, int max_y)
+void ParticlesEngine::init(float min_v0, float max_v0, int min_x, int max_x, int min_y, int max_y, BroadcastExecutor& exec)
 {
 	m_min_x = min_x; 
 	m_max_x = max_x; 
@@ -62,7 +62,7 @@ void ParticlesEngine::init(float min_v0, float max_v0, int min_x, int max_x, int
 	m_max_y = max_y;
 	m_min_v0 = min_v0;
 	m_max_v0 = max_v0;
-	std::thread workerThread(&ParticlesEngine::workerThread, this);
+	std::thread workerThread(&ParticlesEngine::workerThread, this, std::ref(exec));
 	workerThread.detach();
 }
 
@@ -78,7 +78,7 @@ void ParticlesEngine::render()
 	for (uint i = 0; i < rs.size; ++i)
 	{
 		RenderParticle p = m_render_particles[rs.buffer_idx][i];
-		platform::drawPoint(p.x, p.y, p.r, p.g, p.b, p.a);
+		platform::drawPixel(p.x, p.y, p.r, p.g, p.b, p.a);
 	}
 }
 
@@ -92,11 +92,10 @@ void ParticlesEngine::destroy()
 	m_worker_must_exit = true;
 }
 
-void ParticlesEngine::workerThread()
+void ParticlesEngine::workerThread(BroadcastExecutor& executor)
 {
 	uint hardware = std::thread::hardware_concurrency();
 	uint particles_threads_count = hardware <= 3 ? 1 : hardware - 1;
-	BroadcastExecutor executor(particles_threads_count, m_worker_must_exit);
 
 	uint back_buffer_idx = 1;
 	uint front_buffer_idx = 0;

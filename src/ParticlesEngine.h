@@ -5,6 +5,8 @@
 #include <atomic>
 #include <algorithm>
 
+class BroadcastExecutor;
+
 using uint = unsigned int;
 
 // internal particle interface
@@ -56,7 +58,7 @@ public:
 	// call to initialize
 	// min/max_v0 - min/max initial velocity in px/ms,
 	// max/min_x/y - the edge where the destruction of particles occurs
-	void init(float min_v0, float max_v0, int min_x, int max_x, int min_y, int max_y);
+	void init(float min_v0, float max_v0, int min_x, int max_x, int min_y, int max_y, BroadcastExecutor& exec);
 
 	// call to update, dt in ms
 	void update(int dt);
@@ -71,7 +73,7 @@ public:
 	void destroy();
 
 private:
-	void workerThread();
+	void workerThread(BroadcastExecutor& executor);
 
 	void pushBurstEvent(int x, int y);
 
