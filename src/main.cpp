@@ -76,22 +76,26 @@ void pushLine(char symbol, xm::vec2 a, xm::vec2 b);
 void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c);
 void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, BroadcastExecutor& exec);
 
+template <typename VertexShader>
+void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, VertexShader vertex_shader);
+
+template <typename VertexShader>
+void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, BroadcastExecutor& exec, VertexShader vertex_shader);
+
 void pushPixelRaw(char symbol, xm::ivec2 pos);
 
 inline xm::uvec2 NDCtoPixelu(xm::vec2 pos);
 inline xm::ivec2 NDCtoPixeli(xm::vec2 pos);
 
-
-
 Window g_main_window;
 Framebuffer g_main_framebuffer;
 
-char g_intensity_symbols[] = " .:-=+*#%@";
+char g_intensity_symbols[] = " .-:=+%*@#";
 int g_intensity_symbols_size = sizeof(g_intensity_symbols) - 1;
 char g_clear_symbol = g_intensity_symbols[0];
 char g_max_intensity_symbol = g_intensity_symbols[g_intensity_symbols_size - 1];
 
-char getInesitySymbol(float intesity) 
+char getIntensitySymbol(float intesity)
 {
     int idx = ((g_intensity_symbols_size - 1) * intesity) + 0.5f;
     return g_intensity_symbols[std::clamp(idx, 0, g_intensity_symbols_size - 1)];
@@ -149,10 +153,22 @@ int main(int argc, char* argv[])
         g_particles_engine.render();
 
         xm::vec2 a(-0.5f, -0.5f);
-        xm::vec2 b(0.0f, 0.0f);
-        xm::vec2 c(-0.2f, -0.6f);
+        xm::vec2 b(0.0f, 0.5f);
+        xm::vec2 c(0.5f, -0.5f);
         
-        pushTriangle(g_max_intensity_symbol, a, b, c, current_exec);
+        pushTriangle(g_max_intensity_symbol, a, b, c, current_exec, [a = 0.1f, b = 0.5f, c = 1.00f]
+        (char symbol, int x, int y, float alpha, float beta, float gamma)
+            {
+                float max = std::max(std::max(alpha + beta, beta + gamma), alpha + gamma);
+
+                if (max > 0.90f) 
+                {
+                    float intensity = a * alpha + b * beta + c * gamma;
+                    char current_symbol = getIntensitySymbol(intensity);
+                    platform::drawPixel(x, y, current_symbol);
+                }
+            }
+        );
 
         draw();
     }
@@ -214,6 +230,18 @@ void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, BroadcastExec
     pushTriangleBarycenterRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c), exec);
 }
 
+template <typename FragmentShader>
+void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, FragmentShader fragment_shader)
+{
+    pushTriangleBarycenterRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c), fragment_shader);
+}
+
+template <typename FragmentShader>
+void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, BroadcastExecutor& exec, FragmentShader fragment_shader)
+{
+    pushTriangleBarycenterRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c), exec, fragment_shader);
+}
+
 inline xm::uvec2 NDCtoPixelu(xm::vec2 pos)
 {
     return xm::uvec2(g_main_window.m_size.x * (pos.x + 1.0f) / 2.0f, g_main_window.m_size.y * (pos.y + 1.0f) / 2.0f);
@@ -261,6 +289,6 @@ void platform::drawPixel(int x, int y, float r, float g, float b, float a)
     float intensity = (r + g + b) / 3.0f;
     intensity *= a;
     
-    char symbol = getInesitySymbol(intensity);
+    char symbol = getIntensitySymbol(intensity);
     pushPixelRaw(symbol, xm::ivec2(x, y));
 }

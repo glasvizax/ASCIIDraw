@@ -8,127 +8,25 @@
 
 void pushTriangleBarycenterRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 c, BroadcastExecutor& exec)
 {
-    xm::ivec2 bbmin, bbmax;
-    bbmin.x = std::min(std::min(a.x, b.x), c.x);
-    bbmin.y = std::min(std::min(a.y, b.y), c.y);
-    bbmax.x = std::max(std::max(a.x, b.x), c.x);
-    bbmax.y = std::max(std::max(a.y, b.y), c.y);
-
-    int triangle_area_sign = xm::cross2D(b - a, c - a);
-    if (triangle_area_sign == 0)
-    {
-        return;
-    }
-
-    xm::ivec2 per_thread;
-    int width = bbmax.x - bbmin.x, height = bbmax.y - bbmin.y;
-    int current_thread_count = exec.m_thread_count + 1;
-    bool horizontal = false;
-    if (height > width)
-    {
-        per_thread.x = width / current_thread_count;
-        per_thread.y = height;
-    }
-    else
-    {
-        per_thread.x = width;
-        per_thread.y = height / current_thread_count;
-        horizontal = true;
-    }
-
-    exec.pushSync([
-        _per_thread = per_thread,
-        _bbmin = bbmin,
-        _bbmax = bbmax,
-        _triangle_area_sign = triangle_area_sign,
-        _a = a, _b = b, _c = c,
-        _symbol = symbol,
-        _horizontal = horizontal
-    ]
-    (unsigned int thread_idx, unsigned int thread_count)
+    pushTriangleBarycenterRaw(symbol, a, b, c, exec,
+        []
+        (char symbol, int x, int y, float alpha, float beta, float gamma)
         {
-            int curr_y, curr_x;
-            if (_horizontal)
-            {
-                curr_x = 0;
-                curr_y = thread_idx * _per_thread.y;
-            }
-            else
-            {
-                curr_x = thread_idx * _per_thread.x;
-                curr_y = 0;
-            }
-
-            curr_y += _bbmin.y;
-            curr_x += _bbmin.x;
-            if (thread_idx != (thread_count - 1))
-            {
-                for (int x = 0; x < _per_thread.x; ++x)
-                {
-                    for (int y = 0; y < _per_thread.y; ++y)
-                    {
-                        xm::ivec2 curr(curr_x + x, curr_y + y);
-                        int alpha_sgn = xm::cross2D(_b - curr, _c - curr) * _triangle_area_sign;
-                        int beta_sgn = xm::cross2D(_c - curr, _a - curr) * _triangle_area_sign;
-                        int gamma_sgn = xm::cross2D(_a - curr, _b - curr) * _triangle_area_sign;
-
-                        if (alpha_sgn >= 0 && beta_sgn >= 0 && gamma_sgn >= 0)
-                        {
-                            platform::drawPixel(curr.x, curr.y, _symbol);
-                        }
-                    }
-                }
-            }
-            else
-            {
-                for (int x = curr_x; x <= _bbmax.x; ++x)
-                {
-                    for (int y = curr_y; y <= _bbmax.y; ++y)
-                    {
-                        xm::ivec2 curr(x, y);
-                        int alpha_sgn = xm::cross2D(_b - curr, _c - curr) * _triangle_area_sign;
-                        int beta_sgn = xm::cross2D(_c - curr, _a - curr) * _triangle_area_sign;
-                        int gamma_sgn = xm::cross2D(_a - curr, _b - curr) * _triangle_area_sign;
-
-                        if (alpha_sgn >= 0 && beta_sgn >= 0 && gamma_sgn >= 0)
-                        {
-                            platform::drawPixel(curr.x, curr.y, _symbol);
-                        }
-                    }
-                }
-
-            }
-
-        });
+            platform::drawPixel(x, y, symbol);
+        }
+    );
 }
 
 
 void pushTriangleBarycenterRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 c)
 {
-    xm::ivec2 bbmin, bbmax;
-    bbmin.x = std::min(std::min(a.x, b.x), c.x);
-    bbmin.y = std::min(std::min(a.y, b.y), c.y);
-    bbmax.x = std::max(std::max(a.x, b.x), c.x);
-    bbmax.y = std::max(std::max(a.y, b.y), c.y);
-
-    int triangle_area_sign = xm::cross2D(b - a, c - a);
-
-    for (int x = bbmin.x; x <= bbmax.x; ++x)
-    {
-        for (int y = bbmin.y; y <= bbmax.y; ++y)
+    pushTriangleBarycenterRaw(symbol, a, b, c, 
+        []
+        (char symbol, int x, int y, float alpha, float beta, float gamma)
         {
-            xm::ivec2 curr(x, y);
-            int alpha_sgn = xm::cross2D(b - curr, c - curr) * triangle_area_sign;
-            int beta_sgn = xm::cross2D(c - curr, a - curr) * triangle_area_sign;
-            int gamma_sgn = xm::cross2D(a - curr, b - curr) * triangle_area_sign;
-
-            if (alpha_sgn >= 0 && beta_sgn >= 0 && gamma_sgn >= 0)
-            {
-                platform::drawPixel(curr.x, curr.y, symbol);
-            }
+            platform::drawPixel(x, y, symbol);
         }
-    }
-
+    );
 }
 
 
