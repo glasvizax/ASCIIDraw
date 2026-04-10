@@ -9,6 +9,7 @@
 #include <cstdlib>
 
 #include <xm/xm.h>
+#include <xm/math_helpers.h>
 
 #include "ParticlesEngine.h"
 #include "Platform.h"
@@ -20,19 +21,39 @@
 
 using uint = unsigned int;
 
-struct Framebuffer 
+template<typename T>
+struct Framebuffer
 {
-    std::string m_buffer;
+    std::vector<T> m_buffer;
     xm::ivec2 m_size;
     uint32_t m_buff_size;
 
-    void init(xm::ivec2 size) 
+    void init(xm::ivec2 size)
     {
         m_size = size;
         m_buff_size = m_size.x * m_size.y;
         m_buffer.resize(m_buff_size);
     }
 };
+
+template<>
+struct Framebuffer<char>
+{
+    std::string m_buffer;
+    xm::ivec2 m_size;
+    uint32_t m_buff_size;
+
+    void init(xm::ivec2 size)
+    {
+        m_size = size;
+        m_buff_size = m_size.x * m_size.y;
+        m_buffer.resize(m_buff_size);
+    }
+};
+
+using CharFramebuffer = Framebuffer<char>;
+using U8Framebuffer = Framebuffer<uint8_t>;
+using FloatFramebuffer = Framebuffer<float>;
 
 struct Window 
 {
@@ -67,7 +88,6 @@ struct Window
 
 };
 
-void clearBuffer();
 void draw();
 void processInput();
 
@@ -76,22 +96,17 @@ void pushLine(char symbol, xm::vec2 a, xm::vec2 b);
 void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c);
 void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, BroadcastExecutor& exec);
 
-template <typename VertexShader>
-void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, VertexShader vertex_shader);
-
-template <typename VertexShader>
-void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, BroadcastExecutor& exec, VertexShader vertex_shader);
-
 void pushPixelRaw(char symbol, xm::ivec2 pos);
 
 inline xm::uvec2 NDCtoPixelu(xm::vec2 pos);
 inline xm::ivec2 NDCtoPixeli(xm::vec2 pos);
 
 Window g_main_window;
-Framebuffer g_main_framebuffer;
+CharFramebuffer g_main_framebuffer;
+FloatFramebuffer g_z_framebuffer;
 
 char g_intensity_symbols[] = " .-:=+%*@#";
-int g_intensity_symbols_size = sizeof(g_intensity_symbols) - 1;
+constexpr int g_intensity_symbols_size = sizeof(g_intensity_symbols) - 1;
 char g_clear_symbol = g_intensity_symbols[0];
 char g_max_intensity_symbol = g_intensity_symbols[g_intensity_symbols_size - 1];
 
@@ -113,27 +128,176 @@ std::atomic<bool> running{ true };
 
 constexpr int MIN_UPDATE_PERIOD_MS = 15;
 
+/*
+auto fragment_shader = [a = 0.1f, b = 0.5f, c = 1.00f]
+(char symbol, int x, int y, float alpha, float beta, float gamma)
+    {
+        
+        float max = std::max(std::max(alpha + beta, beta + gamma), alpha + gamma);
+        if (max > 0.90f)
+        {
+            float intensity = a * alpha + b * beta + c * gamma;
+            char current_symbol = getIntensitySymbol(intensity);
+            platform::drawPixel(x, y, current_symbol);
+        }
+       
+
+        float intensity = a * alpha + b * beta + c * gamma;
+        char current_symbol = getIntensitySymbol(intensity);
+        platform::drawPixel(x, y, current_symbol);
+
+    };
+ */
+
+template <typename FragmentShader>
+void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, FragmentShader fragment_shader)
+{
+    pushTriangleBarycenterRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c), fragment_shader);
+}
+
+template <typename FragmentShader>
+void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, BroadcastExecutor& exec, FragmentShader fragment_shader)
+{
+    pushTriangleBarycenterRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c), exec, fragment_shader);
+}
+
+template<typename FramebufferType>
+size_t getFramebufferIdx(const FramebufferType& framebuffer, xm::ivec2 pos)
+{
+    size_t y = framebuffer.m_size.y - 1 - pos.y;
+    return y * framebuffer.m_size.x + pos.x;
+}
+
+template<typename FramebufferType>
+auto getFramebufferValue(const FramebufferType& framebuffer, xm::ivec2 pos)
+{
+    return framebuffer.m_buffer[getFramebufferIdx(framebuffer, pos)];
+}
+
+template<typename FramebufferType, typename T>
+void clearFramebuffer(FramebufferType& framebuffer, T clear_value)
+{   
+    if constexpr(sizeof(T) > 1)
+    {
+        std::fill(framebuffer.m_buffer.data(), framebuffer.m_buffer.data() + framebuffer.m_buff_size, clear_value);
+    }
+    else 
+    {
+        std::memset((void*)framebuffer.m_buffer.data(), clear_value, sizeof(T) * framebuffer.m_buff_size);
+    }
+}
+
+template<typename FramebufferType, typename T>
+void pushFramebufferValueRaw(FramebufferType& framebuffer, xm::ivec2 pos, T value)
+{
+    framebuffer.m_buffer[getFramebufferIdx(framebuffer, pos)] = value;
+}
+
+xm::vec3 g_cube_vertices[] = {
+    {-1, -1, -1}, 
+    { 1, -1, -1}, 
+    { 1,  1, -1},
+    {-1,  1, -1}, 
+    {-1, -1,  1}, 
+    { 1, -1,  1}, 
+    { 1,  1,  1}, 
+    {-1,  1,  1}  
+};
+
+int g_cube_indices[] = {
+    // (-Z)
+    0, 1, 2,
+    0, 2, 3,
+
+    // (+Z)
+    4, 6, 5,
+    4, 7, 6,
+
+    // (-X)
+    0, 3, 7,
+    0, 7, 4,
+
+    // (+X)
+    1, 5, 6,
+    1, 6, 2,
+
+    // (-Y)
+    0, 4, 5,
+    0, 5, 1,
+
+    // (+Y)
+    3, 2, 6,
+    3, 6, 7
+};
+
+xm::vec3 g_cube_pos{ 1.0f, 0.0f, -2.0f };
+
+xm::vec3 g_eye_pos{ 0.0f, 0.0f, 4.0f };
+xm::vec3 g_eye_dir{ 0.0f, 0.0f, -1.0f };
+xm::vec3 g_eye_up{ 0.0f, 1.0f, 0.0f };
+
+xm::vec3 naiveWorldTransoform(xm::vec3 vec, xm::vec3 pos)
+{ 
+    return vec + pos;
+}
+
+xm::vec3 naiveViewTransform(xm::vec3 vec, xm::vec3 eye_pos, xm::vec3 look_dir, xm::vec3 eye_up) 
+{ 
+    xm::vec3 z = xm::normalize(-look_dir); 
+    xm::vec3 x = xm::normalize(xm::cross(z, eye_up));
+    xm::vec3 y = xm::cross(x, z); 
+
+    xm::vec3 p = vec - eye_pos; 
+
+    return xm::vec3(
+            xm::dot(p, x), 
+            xm::dot(p, y), 
+            xm::dot(p, z)
+        ); 
+}
+
+
+constexpr float PI = 3.141592653f;
+xm::vec3 naivePerspective(xm::vec3 vec, int n, int f, int fov_vert, int width, int height)
+{
+    float r, t;
+    
+    float aspect = static_cast<float>(width) / static_cast<float>(height);
+    float radians = (PI / 180.0f) * fov_vert;
+    
+    t = std::tan(radians / 2);
+    r = t * aspect;
+    
+    float x = (vec.x / r) / -vec.z;
+    float y = (vec.y / t) / -vec.z;
+    float z = -(vec.z + n) / (f - n);
+
+    return xm::vec3(x, y, z);
+}
+
 int main(int argc, char* argv[])
 {
     auto last_time = std::chrono::steady_clock::now();
 
     int hardware = std::thread::hardware_concurrency();
     int threads_for_broadcasts = hardware < 2 ? 2 : hardware - 3;
-    int current_threads_for_broadcasts = threads_for_broadcasts / 2;
+    int current_threads_for_broadcasts = threads_for_broadcasts; // / 2;
 
     BroadcastExecutor current_exec(current_threads_for_broadcasts, stop);
-    BroadcastExecutor particles_exec(threads_for_broadcasts - current_threads_for_broadcasts, stop);
+    //BroadcastExecutor particles_exec(threads_for_broadcasts - current_threads_for_broadcasts, stop);
 
     std::thread input_thread(inputThread);
     input_thread.detach();
 
     g_main_window.init();
     g_main_framebuffer.init(g_main_window.m_size);
-    g_particles_engine.init(10 / 1000.0f, 20 / 1000.0f, 2, g_main_window.m_size.x - 2, 2, g_main_window.m_size.y - 2, particles_exec);
+    g_z_framebuffer.init(g_main_window.m_size);
+    //g_particles_engine.init(10 / 1000.0f, 20 / 1000.0f, 2, g_main_window.m_size.x - 2, 2, g_main_window.m_size.y - 2, particles_exec);
 
     while (!stop)
     {
-        clearBuffer();
+        clearFramebuffer(g_main_framebuffer, g_clear_symbol);
+        clearFramebuffer(g_z_framebuffer, 1.0f);
 
         auto time = std::chrono::steady_clock::now();
         int delta = std::chrono::duration_cast<std::chrono::milliseconds>(time - last_time).count();
@@ -146,34 +310,78 @@ int main(int argc, char* argv[])
         
         last_time = time;
         
-        g_particles_engine.update(delta);
+        //g_particles_engine.update(delta);
 
         processInput();
 
-        g_particles_engine.render();
+        for (int i = 0; i < 36; i += 3)
+        {
+            xm::vec3 v0 = g_cube_vertices[g_cube_indices[i]];
+            xm::vec3 v1 = g_cube_vertices[g_cube_indices[i + 1]];
+            xm::vec3 v2 = g_cube_vertices[g_cube_indices[i + 2]];
 
-        xm::vec2 a(-0.5f, -0.5f);
-        xm::vec2 b(0.0f, 0.5f);
-        xm::vec2 c(0.5f, -0.5f);
-        
-        pushTriangle(g_max_intensity_symbol, a, b, c, current_exec, [a = 0.1f, b = 0.5f, c = 1.00f]
-        (char symbol, int x, int y, float alpha, float beta, float gamma)
+            xm::vec3 w0 = naiveWorldTransoform(v0, g_cube_pos);
+            xm::vec3 w1 = naiveWorldTransoform(v1, g_cube_pos);
+            xm::vec3 w2 = naiveWorldTransoform(v2, g_cube_pos);
+
+            xm::vec3 l0 = naiveViewTransform(w0, g_eye_pos, g_eye_dir, g_eye_up);
+            xm::vec3 l1 = naiveViewTransform(w1, g_eye_pos, g_eye_dir, g_eye_up);
+            xm::vec3 l2 = naiveViewTransform(w2, g_eye_pos, g_eye_dir, g_eye_up);
+
+            xm::vec3 n0 = naivePerspective(l0, 1, 50, 40, g_main_window.m_size.x, g_main_window.m_size.y);
+            xm::vec3 n1 = naivePerspective(l1, 1, 50, 40, g_main_window.m_size.x, g_main_window.m_size.y);
+            xm::vec3 n2 = naivePerspective(l2, 1, 50, 40, g_main_window.m_size.x, g_main_window.m_size.y);
+
+            xm::vec2 n0_2d = xm::vec2(n0.x, n0.y);
+            xm::vec2 n1_2d = xm::vec2(n1.x, n1.y);
+            xm::vec2 n2_2d = xm::vec2(n2.x, n2.y);
+            if(n0.z > 1.0f || 
+                n0.z < 0.0f ||
+                n1.z > 1.0f || 
+                n1.z < 0.0f ||
+                n2.z > 1.0f ||
+                n2.z < 0.0f
+                )
             {
-                float max = std::max(std::max(alpha + beta, beta + gamma), alpha + gamma);
-
-                if (max > 0.90f) 
-                {
-                    float intensity = a * alpha + b * beta + c * gamma;
-                    char current_symbol = getIntensitySymbol(intensity);
-                    platform::drawPixel(x, y, current_symbol);
-                }
+                continue;
             }
-        );
+            pushTriangle(g_max_intensity_symbol, n0_2d, n1_2d, n2_2d, current_exec,
+                [a = 0.1f, 
+                b = 0.5f, 
+                c = 1.0f,
+                z0 = n0.z,
+                z1 = n1.z,
+                z2 = n2.z,
+                width = g_main_window.m_size.x,
+                height = g_main_window.m_size.y]
+                (char symbol, int x, int y, float alpha, float beta, float gamma)
+                {
+                    if (x < 0 || x >= width || y < 0 || y >= height)
+                    {
+                        return;
+                    }
+
+                    float current_z = z0 * alpha + z1 * beta + z2 * gamma;
+                    float buffer_z = getFramebufferValue(g_z_framebuffer, xm::ivec2(x, y));
+
+                    if(current_z < buffer_z)
+                    {
+                        float intensity = a * alpha + b * beta + c * gamma;
+                        char current_symbol = getIntensitySymbol(intensity);
+                        platform::drawPixel(x, y, current_symbol);
+                        pushFramebufferValueRaw(g_z_framebuffer, xm::ivec2(x, y), current_z);
+                    }
+                });
+        }
+
+
+
+        //g_particles_engine.render();
 
         draw();
     }
 
-    g_particles_engine.destroy();
+    //g_particles_engine.destroy();
 }
 
 void inputThread() 
@@ -204,12 +412,6 @@ wchar_t getLastInputWChar()
     return key;
 }
 
-
-void clearBuffer()
-{
-    std::memset((void*)g_main_framebuffer.m_buffer.data(), g_clear_symbol, g_main_framebuffer.m_buff_size);
-}
-
 void pushLine(char symbol, xm::vec2 a, xm::vec2 b)
 {
     pushLineRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b));
@@ -230,18 +432,6 @@ void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, BroadcastExec
     pushTriangleBarycenterRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c), exec);
 }
 
-template <typename FragmentShader>
-void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, FragmentShader fragment_shader)
-{
-    pushTriangleBarycenterRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c), fragment_shader);
-}
-
-template <typename FragmentShader>
-void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, BroadcastExecutor& exec, FragmentShader fragment_shader)
-{
-    pushTriangleBarycenterRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c), exec, fragment_shader);
-}
-
 inline xm::uvec2 NDCtoPixelu(xm::vec2 pos)
 {
     return xm::uvec2(g_main_window.m_size.x * (pos.x + 1.0f) / 2.0f, g_main_window.m_size.y * (pos.y + 1.0f) / 2.0f);
@@ -252,11 +442,9 @@ inline xm::ivec2 NDCtoPixeli(xm::vec2 pos)
     return xm::ivec2(g_main_window.m_size.x * (pos.x + 1.0f) / 2.0f, g_main_window.m_size.y * (pos.y + 1.0f) / 2.0f);
 }
 
-
 void pushPixelRaw(char symbol, xm::ivec2 pos)
 {
-    size_t y = g_main_framebuffer.m_size.y - 1 - pos.y;
-    size_t idx = y * g_main_framebuffer.m_size.x + pos.x;
+    size_t idx = getFramebufferIdx(g_main_framebuffer, pos);
     g_main_framebuffer.m_buffer[idx] = symbol;
 }
 
@@ -272,10 +460,77 @@ void draw()
 
 void processInput()
 {
+    static float yaw = 180.0f;
+    static float pitch = 0.0f;
+
+    static float rotation_angle_speed = 5.0f;
+    static float translation_speed = 0.1f;
+
     wchar_t last_char = getLastInputWChar();
-    if (last_char == L'k' || last_char == L'л')
+    bool update_dir = false;
+    if (last_char == L'w' || last_char == L'ц')
     {
-        g_particles_engine.generateBurst(g_main_window.m_size.x / 2, g_main_window.m_size.y / 2);
+        g_eye_pos += (g_eye_dir * translation_speed);
+    }
+
+    else if (last_char == L's' || last_char == L'ы')
+    {
+        g_eye_pos -= (g_eye_dir * translation_speed);
+    }
+
+    else if (last_char == L'd' || last_char == L'в')
+    {
+        xm::vec3 left = xm::cross(g_eye_dir, xm::vec3(0.0f, 1.0f, 0.0f));
+
+        g_eye_pos -= (left * translation_speed);
+    }
+
+    else if (last_char == L'a' || last_char == L'ф')
+    {
+        xm::vec3 left = xm::cross(g_eye_dir, xm::vec3(0.0f, 1.0f, 0.0f));
+
+        g_eye_pos += (left * translation_speed);
+    }
+    else if (last_char == L'q' || last_char == L'й')
+    {
+        yaw -= rotation_angle_speed;
+        update_dir = true;
+    }
+    else if (last_char == L'e' || last_char == L'у')
+    {
+        yaw += rotation_angle_speed;
+        update_dir = true;
+    }
+    else if (last_char == L'r' || last_char == L'к')
+    {
+        pitch += rotation_angle_speed;
+        pitch = std::clamp(pitch, -89.0f, 89.0f);
+        update_dir = true;
+    }
+    else if (last_char == L'f' || last_char == L'а')
+    {
+        pitch -= rotation_angle_speed;
+        pitch = std::clamp(pitch, -89.0f, 89.0f);
+        update_dir = true;
+    }
+    else if (last_char == L'z' || last_char == L'я')
+    {
+        g_eye_pos.y += translation_speed;
+    }
+    else if (last_char == L'x' || last_char == L'ч')
+    {
+        g_eye_pos.y -= translation_speed;
+    }
+
+    if (update_dir)
+    {
+        float radYaw = xm::to_radians(yaw);
+        float radPitch = xm::to_radians(pitch);
+
+        g_eye_dir.x = cos(radPitch) * sin(radYaw);
+        g_eye_dir.y = sin(radPitch);
+        g_eye_dir.z = cos(radPitch) * cos(radYaw);
+        g_eye_dir = xm::normalize(g_eye_dir);
     }
 }
 

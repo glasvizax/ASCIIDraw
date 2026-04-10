@@ -68,7 +68,7 @@ void pushTriangleBarycenterRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 
     }
 
     xm::ivec2 per_thread;
-    int width = bbmax.x - bbmin.x, height = bbmax.y - bbmin.y;
+    int width = bbmax.x - bbmin.x + 1, height = bbmax.y - bbmin.y + 1;
     int current_thread_count = exec.m_thread_count + 1;
     bool horizontal = false;
     if (height > width)
