@@ -17,7 +17,6 @@ void pushTriangleBarycenterRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 
     );
 }
 
-
 void pushTriangleBarycenterRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 c)
 {
     pushTriangleBarycenterRaw(symbol, a, b, c, 

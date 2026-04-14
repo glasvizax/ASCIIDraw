@@ -7,9 +7,8 @@
 
 #include <xm/xm.h>
 
-const extern std::string g_data_path;
-
-char getIntensitySymbol(unsigned char intensity);
+#include "DataInfo.h"
+#include "IntensityUtils.h"
 
 class Texture
 {
@@ -22,7 +21,7 @@ public:
     {
         m_size = size;
         m_texture_buffer.resize(m_size.x * m_size.y);
-        std::transform(data, data + m_texture_buffer.size(), m_texture_buffer.data(), getIntensitySymbol);
+        std::transform(data, data + m_texture_buffer.size(), m_texture_buffer.data(), getIntensitySymbolUC);
     }
 
     char getValueUV(xm::vec2 uv)
