@@ -149,3 +149,41 @@ void pushTriangleBarycenterRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 
 
         });
 }
+
+template <typename FragmentShader>
+void pushLineRaw(char symbol, xm::ivec2 a, xm::ivec2 b, FragmentShader fragment_shader)
+{
+    bool steep = std::abs(b.x - a.x) < std::abs(b.y - a.y);
+    if (steep)
+    {
+        std::swap(a.x, a.y);
+        std::swap(b.x, b.y);
+    }
+
+    if (a.x > b.x)
+    {
+        swap(a, b);
+    }
+
+    int y = a.y;
+    int sy = (b.y > a.y) ? 1 : -1;
+    int err = 0;
+
+    for (int x = a.x; x <= b.x; ++x)
+    {
+        if (steep)
+        {
+            fragment_shader(y, x, symbol);
+        }
+        else
+        {
+            fragment_shader(x, y, symbol);
+        }
+        err += 2 * std::abs(b.y - a.y);
+        if (err >= (b.x - a.x))
+        {
+            y += sy;
+            err -= 2 * (b.x - a.x);
+        }
+    }
+}

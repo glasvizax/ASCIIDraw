@@ -137,10 +137,65 @@ int g_cube_indices[] = {
 };
 
 xm::vec3 g_cube_pos{ 1.0f, 0.0f, -2.0f };
+                   //pitch, yaw, roll
+xm::vec3 g_cube_rot{ 0.0f, 0.0f, 0.0f };
+
+xm::vec3 g_cube_x{ 1.0f, 0.0f, 0.0f };
+xm::vec3 g_cube_y{ 0.0f, 1.0f, 0.0f };
+xm::vec3 g_cube_z{ 0.0f, 0.0f, 1.0f };
 
 xm::vec3 g_eye_pos{ 0.0f, 0.0f, 4.0f };
 xm::vec3 g_eye_dir{ 0.0f, 0.0f, -1.0f };
 xm::vec3 g_eye_up{ 0.0f, 1.0f, 0.0f };
+
+//zx
+xm::vec3 naiveRotateYaw(xm::vec3 vec, float angle_deg)
+{
+    float angle_rad = xm::to_radians(-angle_deg);
+
+    xm::vec3 new_vec;
+
+    float c = std::cos(angle_rad);
+    float s = std::sin(angle_rad);
+
+    new_vec.x = c * vec.x - s * vec.z;
+    new_vec.z = s * vec.x + c * vec.z;
+    new_vec.y = vec.y;
+    return new_vec;
+}
+
+//yz
+xm::vec3 naiveRotatePitch(xm::vec3 vec, float angle_deg)
+{
+    float angle_rad = xm::to_radians(angle_deg);
+
+    xm::vec3 new_vec;
+
+    float c = std::cos(angle_rad);
+    float s = std::sin(angle_rad);
+
+    new_vec.y = c * vec.y - s * vec.z;
+    new_vec.z = s * vec.y + c * vec.z;
+    new_vec.x = vec.x;
+
+    return new_vec;
+}
+//xy
+xm::vec3 naiveRotateRoll(xm::vec3 vec, float angle_deg)
+{
+    float angle_rad = xm::to_radians(angle_deg);
+
+    xm::vec3 new_vec;
+
+    float c = std::cos(angle_rad);
+    float s = std::sin(angle_rad);
+
+    new_vec.x = c * vec.x - s * vec.y;
+    new_vec.y = s * vec.x + c * vec.y;
+    
+    new_vec.z = vec.z;
+    return new_vec;
+}
 
 int main(int argc, char* argv[])
 {
@@ -186,9 +241,13 @@ int main(int argc, char* argv[])
             xm::vec3 v1 = g_cube_vertices[g_cube_indices[i + 1]].pos;
             xm::vec3 v2 = g_cube_vertices[g_cube_indices[i + 2]].pos;
 
-            xm::vec3 w0 = naiveWorldTransoform(v0, g_cube_pos);
-            xm::vec3 w1 = naiveWorldTransoform(v1, g_cube_pos);
-            xm::vec3 w2 = naiveWorldTransoform(v2, g_cube_pos);
+            xm::vec3 r0 = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(v0, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
+            xm::vec3 r1 = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(v1, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
+            xm::vec3 r2 = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(v2, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
+
+            xm::vec3 w0 = naiveWorldTransoform(r0, g_cube_pos);
+            xm::vec3 w1 = naiveWorldTransoform(r1, g_cube_pos);
+            xm::vec3 w2 = naiveWorldTransoform(r2, g_cube_pos);
 
             xm::vec3 l0 = naiveViewTransform(w0, g_eye_pos, g_eye_dir, g_eye_up);
             xm::vec3 l1 = naiveViewTransform(w1, g_eye_pos, g_eye_dir, g_eye_up);
@@ -252,6 +311,110 @@ int main(int argc, char* argv[])
                 });
         }
 
+        xm::vec3 cube_pos = g_cube_pos;
+
+        xm::vec3 cx = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(g_cube_x * 2, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
+        xm::vec3 cy = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(g_cube_y * 2, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
+        xm::vec3 cz = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(g_cube_z * 2, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
+
+        xm::vec3 w0 = naiveWorldTransoform(cx, g_cube_pos);
+        xm::vec3 w1 = naiveWorldTransoform(cy, g_cube_pos);
+        xm::vec3 w2 = naiveWorldTransoform(cz, g_cube_pos);
+
+        xm::vec3 l0 = naiveViewTransform(w0, g_eye_pos, g_eye_dir, g_eye_up);
+        xm::vec3 l1 = naiveViewTransform(w1, g_eye_pos, g_eye_dir, g_eye_up);
+        xm::vec3 l2 = naiveViewTransform(w2, g_eye_pos, g_eye_dir, g_eye_up);
+
+        xm::vec3 n0 = naivePerspective(l0, 1, 25, 70, g_main_window.m_size.x, g_main_window.m_size.y);
+        xm::vec3 n1 = naivePerspective(l1, 1, 25, 70, g_main_window.m_size.x, g_main_window.m_size.y);
+        xm::vec3 n2 = naivePerspective(l2, 1, 25, 70, g_main_window.m_size.x, g_main_window.m_size.y);
+
+        if (n0.z > 1.0f ||
+            n0.z < 0.0f ||
+            n1.z > 1.0f ||
+            n1.z < 0.0f ||
+            n2.z > 1.0f ||
+            n2.z < 0.0f
+            )
+        {
+            continue;
+        }
+
+        xm::vec2 n0_2d = xm::vec2(n0.x, n0.y);
+        xm::vec2 n1_2d = xm::vec2(n1.x, n1.y);
+        xm::vec2 n2_2d = xm::vec2(n2.x, n2.y);
+
+        cube_pos = naiveViewTransform(cube_pos, g_eye_pos, g_eye_dir, g_eye_up);
+        cube_pos = naivePerspective(cube_pos, 1, 25, 70, g_main_window.m_size.x, g_main_window.m_size.y);
+
+        xm::vec2 cube_pos2d(cube_pos.x, cube_pos.y);
+        int thickness = 1;
+        pushLine(getIntensitySymbolF(0.0f), cube_pos2d, n0_2d,
+            [width = g_main_window.m_size.x,
+            height = g_main_window.m_size.y,
+            thickness]
+            (int x, int y, char symbol)
+            {
+                for (int dy = -thickness; dy <= thickness; ++dy)
+                {
+                    for (int dx = -thickness; dx <= thickness; ++dx)
+                    {
+                        int px = x + dx;
+                        int py = y + dy;
+
+                        if (px < 0 || px >= width || py < 0 || py >= height)
+                            continue;
+
+                        platform::drawPixel(px, py, symbol);
+                    }
+                }
+            });
+
+        pushLine(getIntensitySymbolF(0.5f), cube_pos2d, n1_2d,
+            [width = g_main_window.m_size.x,
+            height = g_main_window.m_size.y,
+            thickness]
+            (int x, int y, char symbol)
+            {
+                for (int dy = -thickness; dy <= thickness; ++dy)
+                {
+                    for (int dx = -thickness; dx <= thickness; ++dx)
+                    {
+                        int px = x + dx;
+                        int py = y + dy;
+
+                        if (px < 0 || px >= width || py < 0 || py >= height)
+                            continue;
+
+                        platform::drawPixel(px, py, symbol);
+                    }
+                }
+            });
+
+        pushLine(getIntensitySymbolF(0.8f), cube_pos2d, n2_2d,
+            [width = g_main_window.m_size.x,
+            height = g_main_window.m_size.y,
+            thickness]
+            (int x, int y, char symbol)
+            {
+                for (int dy = -thickness; dy <= thickness; ++dy)
+                {
+                    for (int dx = -thickness; dx <= thickness; ++dx)
+                    {
+                        int px = x + dx;
+                        int py = y + dy;
+
+                        if (px < 0 || px >= width || py < 0 || py >= height)
+                            continue;
+
+                        platform::drawPixel(px, py, symbol);
+                    }
+                }
+            });
+
+
+
+
         draw();
     }
 }
@@ -292,7 +455,6 @@ void pushPixelRaw(char symbol, xm::ivec2 pos)
 void draw()
 {
     std::cout << "\x1b[H";
-
 
     for (int y = 0; y < g_main_framebuffer.m_size.y; ++y) 
     {
@@ -346,18 +508,14 @@ void processInput()
         yaw += rotation_angle_speed;
         update_dir = true;
     }
-    else if (last_char == L'r' || last_char == L'к')
-    {
-        pitch += rotation_angle_speed;
-        pitch = std::clamp(pitch, -89.0f, 89.0f);
-        update_dir = true;
-    }
+    /*
     else if (last_char == L'f' || last_char == L'а')
     {
         pitch -= rotation_angle_speed;
         pitch = std::clamp(pitch, -89.0f, 89.0f);
         update_dir = true;
     }
+    */
     else if (last_char == L'z' || last_char == L'я')
     {
         g_eye_pos.y += translation_speed;
@@ -365,6 +523,33 @@ void processInput()
     else if (last_char == L'x' || last_char == L'ч')
     {
         g_eye_pos.y -= translation_speed;
+    }
+
+    else if (last_char == L'r' || last_char == L'к')
+    {
+        g_cube_rot.z += 10.0f;
+
+    }
+    else if (last_char == L'f' || last_char == L'а')
+    {
+        g_cube_rot.z -= 10.0f;
+
+    }
+    else if (last_char == L'p' || last_char == L'з')
+    {
+        g_cube_rot.x += 10.0f;
+    }
+    else if (last_char == L';' || last_char == L'ж')
+    {
+        g_cube_rot.x -= 10.0f;
+    }
+    else if (last_char == L'y' || last_char == L'н')
+    {
+        g_cube_rot.y += 10.0f;
+    }
+    else if (last_char == L'h' || last_char == L'р')
+    {
+        g_cube_rot.y -= 10.0f;
     }
 
     if (update_dir)

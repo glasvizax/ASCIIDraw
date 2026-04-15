@@ -121,37 +121,9 @@ void pushTriangleScanlineRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 c)
 
 void pushLineRaw(char symbol, xm::ivec2 a, xm::ivec2 b)
 {
-    bool steep = std::abs(b.x - a.x) < std::abs(b.y - a.y);
-    if (steep)
-    {
-        std::swap(a.x, a.y);
-        std::swap(b.x, b.y);
-    }
-
-    if (a.x > b.x)
-    {
-        swap(a, b);
-    }
-
-    int y = a.y;
-    int sy = (b.y > a.y) ? 1 : -1;
-    int err = 0;
-
-    for (int x = a.x; x <= b.x; ++x)
-    {
-        if (steep)
-        {
-            platform::drawPixel(y, x, symbol);
-        }
-        else
+    pushLineRaw(symbol, a, b, [](int x, int y, char symbol) 
         {
             platform::drawPixel(x, y, symbol);
         }
-        err += 2 * std::abs(b.y - a.y);
-        if (err >= (b.x - a.x))
-        {
-            y += sy;
-            err -= 2 * (b.x - a.x);
-        }
-    }
+    );
 }

@@ -42,6 +42,12 @@ void pushLine(char symbol, xm::vec2 a, xm::vec2 b)
     pushLineRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b));
 }
 
+template <typename FragmentShader>
+void pushLine(char symbol, xm::vec2 a, xm::vec2 b, FragmentShader fragment_shader)
+{
+    pushLineRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), fragment_shader);
+}
+
 void pushPixel(char symbol, xm::vec2 pos)
 {
     xm::ivec2 pixel = NDCtoPixeli(pos);
@@ -91,6 +97,6 @@ xm::vec3 naivePerspective(xm::vec3 vec, int n, int f, int fov_vert, int width, i
     float x = vec.x / (-vec.z * r);
     float y = vec.y / (-vec.z * t);
     float z = -(vec.z + n) / (f - n);
-
+                  
     return xm::vec3(x, y, z);
 }
