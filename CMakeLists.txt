@@ -12,6 +12,22 @@ set(FETCHCONTENT_BASE_DIR "${EXTERNAL_LIBS_DIR}/fetch_content_libs")
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+endif()
+
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
+
+set(CMAKE_POLICY_DEFAULT_CMP0168 NEW)
+
+FetchContent_Declare(
+    XPERCMakeUtils
+    GIT_REPOSITORY https://github.com/glasvizax/XPERCMakeUtils
+    GIT_TAG v1.1
+)
+
 FetchContent_Declare(
 	XPERMath 
 	GIT_REPOSITORY https://github.com/glasvizax/XPERMath 
@@ -19,40 +35,15 @@ FetchContent_Declare(
 	SYSTEM
 )
 
-FetchContent_MakeAvailable(XPERMath)
+FetchContent_MakeAvailable(XPERCMakeUtils XPERMath)
 
-set(STB_DIR "${EXTERNAL_LIBS_DIR}/stb")
-file(MAKE_DIRECTORY ${STB_DIR})
+list(APPEND CMAKE_MODULE_PATH "${XPERCMakeUtils_SOURCE_DIR}")
 
-function(download_stb name)
-    if(NOT EXISTS ${STB_DIR}/${name})
-        file(DOWNLOAD
-            https://raw.githubusercontent.com/nothings/stb/28d546d5eb77d4585506a20480f4de2e706dff4c/${name}
-            ${STB_DIR}/${name}
-        )
-    endif()
-endfunction()
+include(fetch_stb)
 
-download_stb(stb_image.h)
-download_stb(stb_image_write.h)
+fetch_stb(HEADERS stb_image.h stb_image_write.h SRC_PATH ${EXTERNAL_LIBS_DIR})
 
-file(GENERATE OUTPUT _stb_impl.cpp
-     CONTENT [==[
-        #define STB_IMAGE_IMPLEMENTATION
-        #include "stb_image.h"
-
-        #define STB_IMAGE_WRITE_IMPLEMENTATION
-        #include "stb_image_write.h"
-     ]==]
-)
-
-add_library(stb STATIC _stb_impl.cpp ${STB_DIR}/stb_image.h ${STB_DIR}/stb_image_write.h)
-
-target_include_directories(stb PUBLIC ${STB_DIR})
-
-file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.h src/*.cpp)
-
-set(SRC_FILES ${SOURCES})
+file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.h src/*.cpp)
 
 add_executable(Main ${SRC_FILES})
 
@@ -80,8 +71,5 @@ target_compile_definitions(
 set_target_properties(
     stb 
     PROPERTIES 
-    FOLDER ExternalLibs
+        FOLDER ExternalLibs
 )
-
-
-

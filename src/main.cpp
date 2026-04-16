@@ -197,6 +197,55 @@ xm::vec3 naiveRotateRoll(xm::vec3 vec, float angle_deg)
     return new_vec;
 }
 
+void nonLinearPerspectiveExample()
+{
+    xm::vec2 o(0.0f, -0.4f);
+
+    float _near = 0.1f;
+
+    xm::vec2 x(0.1f, 0.0f);
+    xm::vec2 y(0.0f, 0.1f);
+
+    float current_fov = 120.0f;
+    float half_tan = std::tan(xm::to_radians(current_fov / 2));
+
+    float plane_y = o.y + _near;
+    float plane_r = _near * half_tan;
+    float plane_l = -plane_r;
+
+    xm::vec2 l(plane_l, plane_y);
+    xm::vec2 r(plane_r, plane_y);
+
+    xm::vec2 v0(-0.9f, -0.2f);
+    xm::vec2 v1(0.5f, 0.9f);
+    float alpha = 0.5f;
+
+    xm::vec2 p = v0 * alpha + v1 * (1 - alpha);
+    /*
+    pushLine(getIntensitySymbolF(1.0f), v0, v1);
+    pushLine(getIntensitySymbolF(1.0f), l, r);
+    */
+    xm::vec2 v0_view = v0 - o;
+    xm::vec2 v1_view = v1 - o;
+    xm::vec2 p_view = p - o;
+
+    xm::vec2 v0_proj((v0_view.x * _near) / v0_view.y, 0);
+    xm::vec2 v1_proj((v1_view.x * _near) / v1_view.y, 0);
+    xm::vec2 p_proj((p_view.x * _near) / p_view.y, 0);
+
+    xm::vec2 v0_ndc = v0_proj + o;
+    xm::vec2 v1_ndc = v1_proj + o;
+
+    // 0.87f !!!
+    float new_alpha = (p_proj.x - v0_proj.x) / (v1_proj.x - v0_proj.x);
+
+    /*
+    pushPixel(getIntensitySymbolF(0.0f), o);
+    pushPixel(getIntensitySymbolF(0.0f), xm::vec2(v0_ndc.x, plane_y));
+    pushPixel(getIntensitySymbolF(0.0f), xm::vec2(v1_ndc.x, plane_y));
+    */
+}
+
 int main(int argc, char* argv[])
 {
     auto last_time = std::chrono::steady_clock::now();
@@ -235,6 +284,37 @@ int main(int argc, char* argv[])
         
         processInput();
 
+        /*
+        for (float i = v0_ndc.x; i <= v1_ndc.x; i += 0.02)
+        {
+            float alpha = (i - v1_ndc.x) / (v0_ndc.x - v1_ndc.x);
+            float beta = 1 - alpha;
+
+            float _x = v0_view.x * alpha + beta * v1_view.x + o.x;
+            float _y = v0_view.y * alpha + beta * v1_view.y + o.y;
+
+            if (_x < -1.0f || _x >= 1.0f || _y < -1.0f || _y >= 1.0f)
+            {
+                continue;
+            }
+            pushPixel(getIntensitySymbolF(0.0f), xm::vec2(_x, _y));
+
+            float check_view_x = _x - o.x;
+            float check_view_y = _y - o.y;
+            // Формула проекции: (X * _near) / Y
+            float screen_x_where_it_actually_landed = (check_view_x * _near) / check_view_y + o.x;
+
+            pushPixel(getIntensitySymbolF(0.0f), xm::vec2(screen_x_where_it_actually_landed, plane_y));
+
+        }
+        */
+
+
+        //pushLine(getIntensitySymbolF(0.0f), o, o + x);
+        //pushLine(getIntensitySymbolF(0.0f), o, o + y);
+
+
+        /*
         for (int i = 0; i < sizeof(g_cube_indices) / sizeof(int); i += 3)
         {
             xm::vec3 v0 = g_cube_vertices[g_cube_indices[i]].pos;
@@ -311,6 +391,7 @@ int main(int argc, char* argv[])
                 });
         }
 
+        
         xm::vec3 cube_pos = g_cube_pos;
 
         xm::vec3 cx = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(g_cube_x * 2, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
@@ -350,7 +431,8 @@ int main(int argc, char* argv[])
         xm::vec2 cube_pos2d(cube_pos.x, cube_pos.y);
         int thickness = 1;
         pushLine(getIntensitySymbolF(0.0f), cube_pos2d, n0_2d,
-            [width = g_main_window.m_size.x,
+            [
+            width = g_main_window.m_size.x,
             height = g_main_window.m_size.y,
             thickness]
             (int x, int y, char symbol)
@@ -411,9 +493,7 @@ int main(int argc, char* argv[])
                     }
                 }
             });
-
-
-
+            */
 
         draw();
     }
