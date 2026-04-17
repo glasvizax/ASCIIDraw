@@ -66,6 +66,7 @@ target_compile_definitions(
     Main
     PRIVATE
         DATA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/"
+        XM_ROW_MAJOR
 )
 
 set_target_properties(

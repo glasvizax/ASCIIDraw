@@ -3,8 +3,6 @@
 #include <algorithm>
 #include <string>
 
-#include "stb_image.h"
-
 #include <xm/xm.h>
 
 #include "DataInfo.h"

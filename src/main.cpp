@@ -197,54 +197,9 @@ xm::vec3 naiveRotateRoll(xm::vec3 vec, float angle_deg)
     return new_vec;
 }
 
-void nonLinearPerspectiveExample()
-{
-    xm::vec2 o(0.0f, -0.4f);
+void perspective(float);
 
-    float _near = 0.1f;
 
-    xm::vec2 x(0.1f, 0.0f);
-    xm::vec2 y(0.0f, 0.1f);
-
-    float current_fov = 120.0f;
-    float half_tan = std::tan(xm::to_radians(current_fov / 2));
-
-    float plane_y = o.y + _near;
-    float plane_r = _near * half_tan;
-    float plane_l = -plane_r;
-
-    xm::vec2 l(plane_l, plane_y);
-    xm::vec2 r(plane_r, plane_y);
-
-    xm::vec2 v0(-0.9f, -0.2f);
-    xm::vec2 v1(0.5f, 0.9f);
-    float alpha = 0.5f;
-
-    xm::vec2 p = v0 * alpha + v1 * (1 - alpha);
-    /*
-    pushLine(getIntensitySymbolF(1.0f), v0, v1);
-    pushLine(getIntensitySymbolF(1.0f), l, r);
-    */
-    xm::vec2 v0_view = v0 - o;
-    xm::vec2 v1_view = v1 - o;
-    xm::vec2 p_view = p - o;
-
-    xm::vec2 v0_proj((v0_view.x * _near) / v0_view.y, 0);
-    xm::vec2 v1_proj((v1_view.x * _near) / v1_view.y, 0);
-    xm::vec2 p_proj((p_view.x * _near) / p_view.y, 0);
-
-    xm::vec2 v0_ndc = v0_proj + o;
-    xm::vec2 v1_ndc = v1_proj + o;
-
-    // 0.87f !!!
-    float new_alpha = (p_proj.x - v0_proj.x) / (v1_proj.x - v0_proj.x);
-
-    /*
-    pushPixel(getIntensitySymbolF(0.0f), o);
-    pushPixel(getIntensitySymbolF(0.0f), xm::vec2(v0_ndc.x, plane_y));
-    pushPixel(getIntensitySymbolF(0.0f), xm::vec2(v1_ndc.x, plane_y));
-    */
-}
 
 int main(int argc, char* argv[])
 {
@@ -284,42 +239,20 @@ int main(int argc, char* argv[])
         
         processInput();
 
-        /*
-        for (float i = v0_ndc.x; i <= v1_ndc.x; i += 0.02)
-        {
-            float alpha = (i - v1_ndc.x) / (v0_ndc.x - v1_ndc.x);
-            float beta = 1 - alpha;
+        
+        float _far = 25, _near = 1;
+        
+        xm::vec3 scale(1.0f, 5.0f, 1.0f);
 
-            float _x = v0_view.x * alpha + beta * v1_view.x + o.x;
-            float _y = v0_view.y * alpha + beta * v1_view.y + o.y;
-
-            if (_x < -1.0f || _x >= 1.0f || _y < -1.0f || _y >= 1.0f)
-            {
-                continue;
-            }
-            pushPixel(getIntensitySymbolF(0.0f), xm::vec2(_x, _y));
-
-            float check_view_x = _x - o.x;
-            float check_view_y = _y - o.y;
-            // Формула проекции: (X * _near) / Y
-            float screen_x_where_it_actually_landed = (check_view_x * _near) / check_view_y + o.x;
-
-            pushPixel(getIntensitySymbolF(0.0f), xm::vec2(screen_x_where_it_actually_landed, plane_y));
-
-        }
-        */
-
-
-        //pushLine(getIntensitySymbolF(0.0f), o, o + x);
-        //pushLine(getIntensitySymbolF(0.0f), o, o + y);
-
-
-        /*
         for (int i = 0; i < sizeof(g_cube_indices) / sizeof(int); i += 3)
         {
             xm::vec3 v0 = g_cube_vertices[g_cube_indices[i]].pos;
             xm::vec3 v1 = g_cube_vertices[g_cube_indices[i + 1]].pos;
             xm::vec3 v2 = g_cube_vertices[g_cube_indices[i + 2]].pos;
+            
+            v0.y = v0.y * scale.y;
+            v1.y = v1.y * scale.y;
+            v2.y = v2.y * scale.y;
 
             xm::vec3 r0 = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(v0, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
             xm::vec3 r1 = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(v1, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
@@ -333,9 +266,9 @@ int main(int argc, char* argv[])
             xm::vec3 l1 = naiveViewTransform(w1, g_eye_pos, g_eye_dir, g_eye_up);
             xm::vec3 l2 = naiveViewTransform(w2, g_eye_pos, g_eye_dir, g_eye_up);
 
-            xm::vec3 n0 = naivePerspective(l0, 1, 25, 70, g_main_window.m_size.x, g_main_window.m_size.y);
-            xm::vec3 n1 = naivePerspective(l1, 1, 25, 70, g_main_window.m_size.x, g_main_window.m_size.y);
-            xm::vec3 n2 = naivePerspective(l2, 1, 25, 70, g_main_window.m_size.x, g_main_window.m_size.y);
+            xm::vec3 n0 = naivePerspective(l0, _near, _far, 70, g_main_window.m_size.x, g_main_window.m_size.y);
+            xm::vec3 n1 = naivePerspective(l1, _near, _far, 70, g_main_window.m_size.x, g_main_window.m_size.y);
+            xm::vec3 n2 = naivePerspective(l2, _near, _far, 70, g_main_window.m_size.x, g_main_window.m_size.y);
             if (n0.z > 1.0f ||
                 n0.z < 0.0f ||
                 n1.z > 1.0f ||
@@ -355,13 +288,19 @@ int main(int argc, char* argv[])
             xm::vec2 uv1 = g_cube_vertices[g_cube_indices[i + 1]].uv;
             xm::vec2 uv2 = g_cube_vertices[g_cube_indices[i + 2]].uv;
             
+            float zv0_n = ((-l0.z) - _near) / (_far - _near);
+            float zv1_n = ((-l1.z) - _near) / (_far - _near);
+            float zv2_n = ((-l2.z) - _near) / (_far - _near);
             pushTriangle(g_max_intensity_symbol, n0_2d, n1_2d, n2_2d, current_exec,
                 [a = 0.1f, 
                 b = 0.5f, 
                 c = 1.0f,
-                z0 = n0.z,
-                z1 = n1.z,
-                z2 = n2.z,
+                zp0 = zv0_n,
+                zp1 = zv1_n,
+                zp2 = zv2_n,
+                zv0 = -l0.z,
+                zv1 = -l1.z,
+                zv2 = -l2.z,
                 width = g_main_window.m_size.x,
                 height = g_main_window.m_size.y,
                 uv0, uv1, uv2,
@@ -374,24 +313,27 @@ int main(int argc, char* argv[])
                         return;
                     }
 
-                    float current_z = z0 * alpha + z1 * beta + z2 * gamma;
+                    float for_zbuf = zp0 * alpha + zp1 * beta + zp2 * gamma;
+                    
                     float buffer_z = g_z_framebuffer.getValue(xm::ivec2(x, y));
 
-                    xm::vec2 current_uv = uv0 * alpha + uv1 * beta + uv2 * gamma;
+                    
 
-                    if(current_z < buffer_z)
+                    if(for_zbuf < buffer_z)
                     {
+                        float current_z = 1.0f / ((1.0f / zv0) * alpha + (1.0f / zv1) * beta + (1.0f / zv2) * gamma);
+                        xm::vec2 current_uv = current_z * ((uv0 / zv0) * alpha + (uv1 / zv1) * beta + (uv2 / zv2) * gamma);
                         //float intensity = a * alpha + b * beta + c * gamma;
                         //char current_symbol = getIntensitySymbol(intensity);
 
                         char current_symbol = awesomeface_tex.getValueUV(current_uv);
                         platform::drawPixel(x, y, current_symbol);
-                        g_z_framebuffer.setValue(xm::ivec2(x, y), current_z);
+                        g_z_framebuffer.setValue(xm::ivec2(x, y), for_zbuf);
                     }
                 });
         }
 
-        
+        /*
         xm::vec3 cube_pos = g_cube_pos;
 
         xm::vec3 cx = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(g_cube_x * 2, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
@@ -420,7 +362,7 @@ int main(int argc, char* argv[])
         {
             continue;
         }
-
+       
         xm::vec2 n0_2d = xm::vec2(n0.x, n0.y);
         xm::vec2 n1_2d = xm::vec2(n1.x, n1.y);
         xm::vec2 n2_2d = xm::vec2(n2.x, n2.y);
