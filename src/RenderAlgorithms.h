@@ -1,8 +1,7 @@
 #pragma once
 
 #include <xm/xm.h>
-
-class BroadcastExecutor;
+#include "BroadcastExecutor.h"
 
 void pushLineRaw(char symbol, xm::ivec2 a, xm::ivec2 b);
 void pushTriangleScanlineRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 c);

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 4.0.0)
 
 include(FetchContent)
 
-project(ASCIIDraw VERSION 0.1.0 LANGUAGES CXX C)
+project(ASCIIDraw VERSION 0.1.1 LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,7 +10,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(EXTERNAL_LIBS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.external_libs")
 set(FETCHCONTENT_BASE_DIR "${EXTERNAL_LIBS_DIR}/fetch_content_libs")
 
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set_property(
+    GLOBAL 
+    PROPERTY 
+        USE_FOLDERS ON
+)
 
 if(POLICY CMP0167)
     cmake_policy(SET CMP0167 NEW)
@@ -66,7 +70,6 @@ target_compile_definitions(
     Main
     PRIVATE
         DATA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/"
-        XM_ROW_MAJOR
 )
 
 set_target_properties(

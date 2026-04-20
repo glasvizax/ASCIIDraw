@@ -5,7 +5,7 @@
 char g_intensity_symbols[] = " .:!/r(l1Z4H9W8$@";
 int g_intensity_symbols_size = sizeof(g_intensity_symbols) - 1;
 
-char g_clear_symbol = g_intensity_symbols[1];
+char g_clear_symbol = g_intensity_symbols[0];
 char g_max_intensity_symbol = g_intensity_symbols[g_intensity_symbols_size - 1];
 
 char getIntensitySymbolF(float intensity)

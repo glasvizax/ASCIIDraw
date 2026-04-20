@@ -136,7 +136,9 @@ int g_cube_indices[] = {
     20, 22, 23
 };
 
+xm::vec3 g_cube_scale{ 1.0f, 5.0f, 5.0f };
 xm::vec3 g_cube_pos{ 1.0f, 0.0f, -2.0f };
+
                    //pitch, yaw, roll
 xm::vec3 g_cube_rot{ 0.0f, 0.0f, 0.0f };
 
@@ -148,66 +150,13 @@ xm::vec3 g_eye_pos{ 0.0f, 0.0f, 4.0f };
 xm::vec3 g_eye_dir{ 0.0f, 0.0f, -1.0f };
 xm::vec3 g_eye_up{ 0.0f, 1.0f, 0.0f };
 
-//zx
-xm::vec3 naiveRotateYaw(xm::vec3 vec, float angle_deg)
-{
-    float angle_rad = xm::to_radians(-angle_deg);
-
-    xm::vec3 new_vec;
-
-    float c = std::cos(angle_rad);
-    float s = std::sin(angle_rad);
-
-    new_vec.x = c * vec.x - s * vec.z;
-    new_vec.z = s * vec.x + c * vec.z;
-    new_vec.y = vec.y;
-    return new_vec;
-}
-
-//yz
-xm::vec3 naiveRotatePitch(xm::vec3 vec, float angle_deg)
-{
-    float angle_rad = xm::to_radians(angle_deg);
-
-    xm::vec3 new_vec;
-
-    float c = std::cos(angle_rad);
-    float s = std::sin(angle_rad);
-
-    new_vec.y = c * vec.y - s * vec.z;
-    new_vec.z = s * vec.y + c * vec.z;
-    new_vec.x = vec.x;
-
-    return new_vec;
-}
-//xy
-xm::vec3 naiveRotateRoll(xm::vec3 vec, float angle_deg)
-{
-    float angle_rad = xm::to_radians(angle_deg);
-
-    xm::vec3 new_vec;
-
-    float c = std::cos(angle_rad);
-    float s = std::sin(angle_rad);
-
-    new_vec.x = c * vec.x - s * vec.y;
-    new_vec.y = s * vec.x + c * vec.y;
-    
-    new_vec.z = vec.z;
-    return new_vec;
-}
-
-void perspective(float);
-
-
-
 int main(int argc, char* argv[])
 {
     auto last_time = std::chrono::steady_clock::now();
 
     int hardware = std::thread::hardware_concurrency();
     int threads_for_broadcasts = hardware < 2 ? 2 : hardware - 3;
-    int current_threads_for_broadcasts = threads_for_broadcasts; // / 2;
+    int current_threads_for_broadcasts = threads_for_broadcasts;
 
     BroadcastExecutor current_exec(current_threads_for_broadcasts, stop);
 
@@ -220,7 +169,9 @@ int main(int argc, char* argv[])
     g_z_framebuffer.init(g_main_window.m_size);
 
     Texture awesomeface_tex = loadTexture("awesomeface.png");
-
+    float _far = 25, _near = 1;
+    xm::mat4 persp = xm::perspective(xm::to_radians(70.0f), g_main_window.m_size.x/static_cast<float>(g_main_window.m_size.y), _near, _far, true);
+    
     while (!stop)
     {
         g_main_framebuffer.clear(g_clear_symbol);
@@ -239,68 +190,63 @@ int main(int argc, char* argv[])
         
         processInput();
 
-        
-        float _far = 25, _near = 1;
-        
-        xm::vec3 scale(1.0f, 5.0f, 1.0f);
+        xm::mat4 model(1.0f);
+        model = xm::scale(model, g_cube_scale);
+        model = xm::translate(model, g_cube_pos);
+
+        xm::mat4 view = xm::lookAt(g_eye_pos, g_eye_dir, g_eye_up);
 
         for (int i = 0; i < sizeof(g_cube_indices) / sizeof(int); i += 3)
         {
-            xm::vec3 v0 = g_cube_vertices[g_cube_indices[i]].pos;
-            xm::vec3 v1 = g_cube_vertices[g_cube_indices[i + 1]].pos;
-            xm::vec3 v2 = g_cube_vertices[g_cube_indices[i + 2]].pos;
+            xm::vec3 vert0 = g_cube_vertices[g_cube_indices[i]].pos;
+            xm::vec3 vert1 = g_cube_vertices[g_cube_indices[i + 1]].pos;
+            xm::vec3 vert2 = g_cube_vertices[g_cube_indices[i + 2]].pos;
+
+            xm::vec4 world0 = model * xm::vec4(vert0, 1.0f);
+            xm::vec4 world1 = model * xm::vec4(vert1, 1.0f);
+            xm::vec4 world2 = model * xm::vec4(vert2, 1.0f);
+
+            xm::vec4 look0 = view * world0;
+            xm::vec4 look1 = view * world1;
+            xm::vec4 look2 = view * world2;
+
+            xm::vec4 clip0 = persp * look0;
+            xm::vec4 clip1 = persp * look1;
+            xm::vec4 clip2 = persp * look2;
+
+            float w0 = clip0.w;
+            float w1 = clip1.w;
+            float w2 = clip2.w;
+
+            xm::vec3 ndc0 = xm::vec3(clip0) / clip0.w;
+            xm::vec3 ndc1 = xm::vec3(clip1) / clip1.w;
+            xm::vec3 ndc2 = xm::vec3(clip2) / clip2.w;
             
-            v0.y = v0.y * scale.y;
-            v1.y = v1.y * scale.y;
-            v2.y = v2.y * scale.y;
-
-            xm::vec3 r0 = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(v0, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
-            xm::vec3 r1 = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(v1, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
-            xm::vec3 r2 = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(v2, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
-
-            xm::vec3 w0 = naiveWorldTransoform(r0, g_cube_pos);
-            xm::vec3 w1 = naiveWorldTransoform(r1, g_cube_pos);
-            xm::vec3 w2 = naiveWorldTransoform(r2, g_cube_pos);
-
-            xm::vec3 l0 = naiveViewTransform(w0, g_eye_pos, g_eye_dir, g_eye_up);
-            xm::vec3 l1 = naiveViewTransform(w1, g_eye_pos, g_eye_dir, g_eye_up);
-            xm::vec3 l2 = naiveViewTransform(w2, g_eye_pos, g_eye_dir, g_eye_up);
-
-            xm::vec3 n0 = naivePerspective(l0, _near, _far, 70, g_main_window.m_size.x, g_main_window.m_size.y);
-            xm::vec3 n1 = naivePerspective(l1, _near, _far, 70, g_main_window.m_size.x, g_main_window.m_size.y);
-            xm::vec3 n2 = naivePerspective(l2, _near, _far, 70, g_main_window.m_size.x, g_main_window.m_size.y);
-            if (n0.z > 1.0f ||
-                n0.z < 0.0f ||
-                n1.z > 1.0f ||
-                n1.z < 0.0f ||
-                n2.z > 1.0f ||
-                n2.z < 0.0f
+            if (ndc0.z > 1.0f ||
+                ndc0.z < 0.0f ||
+                ndc1.z > 1.0f ||
+                ndc1.z < 0.0f ||
+                ndc2.z > 1.0f ||
+                ndc2.z < 0.0f
                 )
             {
                 continue;
             }
 
-            xm::vec2 n0_2d = xm::vec2(n0.x, n0.y);
-            xm::vec2 n1_2d = xm::vec2(n1.x, n1.y);
-            xm::vec2 n2_2d = xm::vec2(n2.x, n2.y);
-
             xm::vec2 uv0 = g_cube_vertices[g_cube_indices[i]].uv;
             xm::vec2 uv1 = g_cube_vertices[g_cube_indices[i + 1]].uv;
             xm::vec2 uv2 = g_cube_vertices[g_cube_indices[i + 2]].uv;
             
-            float zv0_n = ((-l0.z) - _near) / (_far - _near);
-            float zv1_n = ((-l1.z) - _near) / (_far - _near);
-            float zv2_n = ((-l2.z) - _near) / (_far - _near);
-            pushTriangle(g_max_intensity_symbol, n0_2d, n1_2d, n2_2d, current_exec,
+            pushTriangle(g_max_intensity_symbol, xm::vec2(ndc0), xm::vec2(ndc1), xm::vec2(ndc2), current_exec,
                 [a = 0.1f, 
                 b = 0.5f, 
                 c = 1.0f,
-                zp0 = zv0_n,
-                zp1 = zv1_n,
-                zp2 = zv2_n,
-                zv0 = -l0.z,
-                zv1 = -l1.z,
-                zv2 = -l2.z,
+                zp0 = ndc0.z,
+                zp1 = ndc1.z,
+                zp2 = ndc2.z,
+                w0,
+                w1,
+                w2,
                 width = g_main_window.m_size.x,
                 height = g_main_window.m_size.y,
                 uv0, uv1, uv2,
@@ -318,13 +264,12 @@ int main(int argc, char* argv[])
                     float buffer_z = g_z_framebuffer.getValue(xm::ivec2(x, y));
 
                     
-
                     if(for_zbuf < buffer_z)
                     {
-                        float current_z = 1.0f / ((1.0f / zv0) * alpha + (1.0f / zv1) * beta + (1.0f / zv2) * gamma);
-                        xm::vec2 current_uv = current_z * ((uv0 / zv0) * alpha + (uv1 / zv1) * beta + (uv2 / zv2) * gamma);
+                        float current_z = 1.0f / ((1.0f / w0) * alpha + (1.0f / w1) * beta + (1.0f / w2) * gamma);
+                        xm::vec2 current_uv = current_z * ((uv0 / w0) * alpha + (uv1 / w1) * beta + (uv2 / w2) * gamma);
                         //float intensity = a * alpha + b * beta + c * gamma;
-                        //char current_symbol = getIntensitySymbol(intensity);
+                        //char current_symbol = getIntensitySymbolF(intensity);
 
                         char current_symbol = awesomeface_tex.getValueUV(current_uv);
                         platform::drawPixel(x, y, current_symbol);
@@ -332,110 +277,6 @@ int main(int argc, char* argv[])
                     }
                 });
         }
-
-        /*
-        xm::vec3 cube_pos = g_cube_pos;
-
-        xm::vec3 cx = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(g_cube_x * 2, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
-        xm::vec3 cy = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(g_cube_y * 2, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
-        xm::vec3 cz = naiveRotateYaw(naiveRotatePitch(naiveRotateRoll(g_cube_z * 2, g_cube_rot.z), g_cube_rot.x), g_cube_rot.y);
-
-        xm::vec3 w0 = naiveWorldTransoform(cx, g_cube_pos);
-        xm::vec3 w1 = naiveWorldTransoform(cy, g_cube_pos);
-        xm::vec3 w2 = naiveWorldTransoform(cz, g_cube_pos);
-
-        xm::vec3 l0 = naiveViewTransform(w0, g_eye_pos, g_eye_dir, g_eye_up);
-        xm::vec3 l1 = naiveViewTransform(w1, g_eye_pos, g_eye_dir, g_eye_up);
-        xm::vec3 l2 = naiveViewTransform(w2, g_eye_pos, g_eye_dir, g_eye_up);
-
-        xm::vec3 n0 = naivePerspective(l0, 1, 25, 70, g_main_window.m_size.x, g_main_window.m_size.y);
-        xm::vec3 n1 = naivePerspective(l1, 1, 25, 70, g_main_window.m_size.x, g_main_window.m_size.y);
-        xm::vec3 n2 = naivePerspective(l2, 1, 25, 70, g_main_window.m_size.x, g_main_window.m_size.y);
-
-        if (n0.z > 1.0f ||
-            n0.z < 0.0f ||
-            n1.z > 1.0f ||
-            n1.z < 0.0f ||
-            n2.z > 1.0f ||
-            n2.z < 0.0f
-            )
-        {
-            continue;
-        }
-       
-        xm::vec2 n0_2d = xm::vec2(n0.x, n0.y);
-        xm::vec2 n1_2d = xm::vec2(n1.x, n1.y);
-        xm::vec2 n2_2d = xm::vec2(n2.x, n2.y);
-
-        cube_pos = naiveViewTransform(cube_pos, g_eye_pos, g_eye_dir, g_eye_up);
-        cube_pos = naivePerspective(cube_pos, 1, 25, 70, g_main_window.m_size.x, g_main_window.m_size.y);
-
-        xm::vec2 cube_pos2d(cube_pos.x, cube_pos.y);
-        int thickness = 1;
-        pushLine(getIntensitySymbolF(0.0f), cube_pos2d, n0_2d,
-            [
-            width = g_main_window.m_size.x,
-            height = g_main_window.m_size.y,
-            thickness]
-            (int x, int y, char symbol)
-            {
-                for (int dy = -thickness; dy <= thickness; ++dy)
-                {
-                    for (int dx = -thickness; dx <= thickness; ++dx)
-                    {
-                        int px = x + dx;
-                        int py = y + dy;
-
-                        if (px < 0 || px >= width || py < 0 || py >= height)
-                            continue;
-
-                        platform::drawPixel(px, py, symbol);
-                    }
-                }
-            });
-
-        pushLine(getIntensitySymbolF(0.5f), cube_pos2d, n1_2d,
-            [width = g_main_window.m_size.x,
-            height = g_main_window.m_size.y,
-            thickness]
-            (int x, int y, char symbol)
-            {
-                for (int dy = -thickness; dy <= thickness; ++dy)
-                {
-                    for (int dx = -thickness; dx <= thickness; ++dx)
-                    {
-                        int px = x + dx;
-                        int py = y + dy;
-
-                        if (px < 0 || px >= width || py < 0 || py >= height)
-                            continue;
-
-                        platform::drawPixel(px, py, symbol);
-                    }
-                }
-            });
-
-        pushLine(getIntensitySymbolF(0.8f), cube_pos2d, n2_2d,
-            [width = g_main_window.m_size.x,
-            height = g_main_window.m_size.y,
-            thickness]
-            (int x, int y, char symbol)
-            {
-                for (int dy = -thickness; dy <= thickness; ++dy)
-                {
-                    for (int dx = -thickness; dx <= thickness; ++dx)
-                    {
-                        int px = x + dx;
-                        int py = y + dy;
-
-                        if (px < 0 || px >= width || py < 0 || py >= height)
-                            continue;
-
-                        platform::drawPixel(px, py, symbol);
-                    }
-                }
-            });
-            */
 
         draw();
     }
@@ -509,25 +350,25 @@ void processInput()
 
     else if (last_char == L'd' || last_char == L'в')
     {
-        xm::vec3 left = xm::cross(g_eye_dir, xm::vec3(0.0f, 1.0f, 0.0f));
+        xm::vec3 right = xm::cross(g_eye_dir, xm::vec3(0.0f, 1.0f, 0.0f));
 
-        g_eye_pos -= (left * translation_speed);
+        g_eye_pos += (right * translation_speed);
     }
 
     else if (last_char == L'a' || last_char == L'ф')
     {
-        xm::vec3 left = xm::cross(g_eye_dir, xm::vec3(0.0f, 1.0f, 0.0f));
+        xm::vec3 right = xm::cross(g_eye_dir, xm::vec3(0.0f, 1.0f, 0.0f));
 
-        g_eye_pos += (left * translation_speed);
+        g_eye_pos -= (right * translation_speed);
     }
     else if (last_char == L'q' || last_char == L'й')
     {
-        yaw -= rotation_angle_speed;
+        yaw += rotation_angle_speed;
         update_dir = true;
     }
     else if (last_char == L'e' || last_char == L'у')
     {
-        yaw += rotation_angle_speed;
+        yaw -= rotation_angle_speed;
         update_dir = true;
     }
     /*
@@ -599,3 +440,6 @@ void platform::drawPixel(int x, int y, float r, float g, float b, float a)
     char symbol = getIntensitySymbolF(intensity);
     pushPixelRaw(symbol, xm::ivec2(x, y));
 }
+
+#pragma pop_macro("near")
+#pragma pop_macro("far")
