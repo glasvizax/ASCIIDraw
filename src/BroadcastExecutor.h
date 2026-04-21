@@ -5,6 +5,7 @@
 #include <vector>
 #include <mutex>
 #include <iostream>
+#include <span>
 
 // usage: 
 // BroadcastExecutor exec(amounts of threads, flag that marks the end);
@@ -35,6 +36,14 @@ public:
 	// push task for threads
 	template<typename Lambda>
 	void push(const Lambda& task);
+
+	// parallel foreach
+	template<typename Lambda, typename T, std::size_t Extent>
+	void foreach(const Lambda& task, std::span<T, Extent> span);
+
+	// parallel foreach sync
+	template<typename Lambda, typename T, std::size_t Extent>
+	void foreachSync(const Lambda& task, std::span<T, Extent> span);
 
 	// push task for threads, the current thread also participates in the calculations, don't call wait() after !!!
 	template<typename Lambda>
@@ -77,6 +86,8 @@ private:
 	std::atomic<int> m_task_id = 0;
 };
 
+using uint = unsigned int;
+
 template<typename Lambda>
 inline void BroadcastExecutor::push(const Lambda& task)
 {
@@ -84,6 +95,70 @@ inline void BroadcastExecutor::push(const Lambda& task)
 	{
 		return;
 	}
+}
+
+
+template<typename Lambda, typename T, std::size_t Extent>
+inline void BroadcastExecutor::foreach(const Lambda& task, std::span<T, Extent> span)
+{
+	uint current_thread_count = m_current_thread_count;
+	uint per_thread = span.size() / current_thread_count;
+	push(
+		[
+			per_thread,
+			span,
+			&task
+		]
+		(uint idx, uint thread_count)
+		{
+			uint start = idx * per_thread;
+			uint end;
+			if (idx == thread_count - 1)
+			{
+				end = span.size();
+			}
+			else
+			{
+				end = start + per_thread;
+			}
+			for (uint i = start; i < end; ++i)
+			{
+				task(span[i]);
+			}
+		}
+	);
+}
+
+template<typename Lambda, typename T, std::size_t Extent>
+inline void BroadcastExecutor::foreachSync(const Lambda& task, std::span<T, Extent> span)
+{
+	uint current_thread_count = m_current_thread_count + 1;
+	uint per_thread = span.size() / current_thread_count;
+	pushSync(
+		[
+			per_thread,
+			span,
+			&task
+		]
+		(uint idx, uint thread_count)
+		{
+			uint start = idx * per_thread;
+			uint end;
+			if (idx == thread_count - 1)
+			{
+				end = span.size();
+			}
+			else
+			{
+				end = start + per_thread;
+			}
+			for (uint i = start; i < end; ++i)
+			{
+				task(span[i], i);
+			}
+		}
+	);
+
 }
 
 template<typename Lambda>

@@ -4,7 +4,7 @@ include(FetchContent)
 
 project(ASCIIDraw VERSION 0.1.1 LANGUAGES CXX C)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(EXTERNAL_LIBS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.external_libs")
@@ -71,6 +71,7 @@ target_compile_definitions(
     Main
     PRIVATE
         DATA_PATH="${CMAKE_CURRENT_SOURCE_DIR}/data/"
+        NOMINMAX
 )
 
 set_directory_properties(

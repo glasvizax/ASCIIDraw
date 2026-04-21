@@ -1,6 +1,4 @@
-﻿#define NOMINMAX
-
-#include <windows.h>
+﻿#include <windows.h>
 #include <conio.h>
 
 #include <stdio.h>
@@ -12,6 +10,7 @@
 #include <xm/math_helpers.h>
 
 #include <queue>
+#include <span>
 
 #include "Platform.h"
 #include "ParticlesEngine.h"
@@ -157,7 +156,7 @@ struct VertexShaderOutput
     xm::vec3 ndc;
     xm::vec2 uv_div_w;
     float w_recip;
-    bool skip = false;
+    bool skip;
 };
 
 VertexShaderOutput g_vertex_shader_outputs[g_cube_vertices_size];
@@ -207,59 +206,38 @@ int main(int argc, char* argv[])
         model = xm::translate(model, g_cube_pos);
 
         xm::mat4 view = xm::lookAt(g_eye_pos, g_eye_dir, g_eye_up);
-        
-        uint current_thread_count = current_exec.m_thread_count + 1;
-        uint per_thread = g_cube_vertices_size / current_thread_count;
 
         // vertex shading
-        current_exec.pushSync(
-            [
-                per_thread,
-                model,
-                view,
-                persp
-            ]
-            (uint idx, uint thread_count)
+        current_exec.foreachSync([
+            model,
+            view,
+            persp](VertexShaderOutput& elem, uint idx)
             {
-                uint start = idx * per_thread;
-                uint end;
-                if(idx == thread_count - 1)
+                xm::vec3 vert = g_cube_vertices[idx].pos;
+                xm::vec4 world = model * xm::vec4(vert, 1.0f);
+                xm::vec4 look = view * world;
+                xm::vec4 clip = persp * look;
+
+                float w = clip.w;
+
+                xm::vec3 ndc = xm::vec3(clip) / w;
+
+                if (ndc.z > 1.0f ||
+                    ndc.z < 0.0f)
                 {
-                    end = g_cube_vertices_size;
-                }
-                else 
-                {
-                    end = start + per_thread;
-                }
-                for(uint i = start; i < end; ++i)
-                {
-                    xm::vec3 vert = g_cube_vertices[i].pos;
-                    xm::vec4 world = model * xm::vec4(vert, 1.0f);
-                    xm::vec4 look = view * world;
-                    xm::vec4 clip = persp * look;
-
-                    float w = clip.w;
-
-                    xm::vec3 ndc = xm::vec3(clip) / w;
-
-                    if (ndc.z > 1.0f ||
-                        ndc.z < 0.0f)
-                    {
-                        g_vertex_shader_outputs[i].skip = true;
-                        continue;
-                    }
-
-                    xm::vec2 uv = g_cube_vertices[i].uv;
-
-                    g_vertex_shader_outputs[i].ndc = ndc;
-                    g_vertex_shader_outputs[i].uv_div_w = uv / w;
-                    g_vertex_shader_outputs[i].w_recip = 1.0f / w;
-                    g_vertex_shader_outputs[i].skip = false;
+                    elem.skip = true;
+                    return;
                 }
 
-            }
+                xm::vec2 uv = g_cube_vertices[idx].uv;
+
+                elem.ndc = ndc;
+                elem.uv_div_w = uv / w;
+                elem.w_recip = 1.0f / w;
+                elem.skip = false;
+            },
+            std::span(g_vertex_shader_outputs)
         );
-
 
         // fragment shading
         for (int i = 0; i < g_cube_indices_size; i += 3)
