@@ -136,9 +136,11 @@ int g_cube_indices[] = {
     20, 22, 23
 };
 
-xm::vec3 g_cube_scale{ 1.0f, 5.0f, 5.0f };
-xm::vec3 g_cube_pos{ 1.0f, 0.0f, -2.0f };
+constexpr int g_cube_vertices_size = sizeof(g_cube_vertices) / sizeof(Vertex);
+constexpr int g_cube_indices_size = sizeof(g_cube_indices) / sizeof(int);
 
+xm::vec3 g_cube_scale{ 1.0f, 5.0f, 5.0f };
+xm::vec3 g_cube_pos{ 1.0f, 0.0f, -8.0f };
                    //pitch, yaw, roll
 xm::vec3 g_cube_rot{ 0.0f, 0.0f, 0.0f };
 
@@ -150,12 +152,22 @@ xm::vec3 g_eye_pos{ 0.0f, 0.0f, 4.0f };
 xm::vec3 g_eye_dir{ 0.0f, 0.0f, -1.0f };
 xm::vec3 g_eye_up{ 0.0f, 1.0f, 0.0f };
 
+struct VertexShaderOutput
+{
+    xm::vec3 ndc;
+    xm::vec2 uv_div_w;
+    float w_recip;
+    bool skip = false;
+};
+
+VertexShaderOutput g_vertex_shader_outputs[g_cube_vertices_size];
+
 int main(int argc, char* argv[])
 {
     auto last_time = std::chrono::steady_clock::now();
 
     int hardware = std::thread::hardware_concurrency();
-    int threads_for_broadcasts = hardware < 2 ? 2 : hardware - 3;
+    int threads_for_broadcasts = hardware < 2 ? 2 : hardware - 2;
     int current_threads_for_broadcasts = threads_for_broadcasts;
 
     BroadcastExecutor current_exec(current_threads_for_broadcasts, stop);
@@ -169,7 +181,7 @@ int main(int argc, char* argv[])
     g_z_framebuffer.init(g_main_window.m_size);
 
     Texture awesomeface_tex = loadTexture("awesomeface.png");
-    float _far = 25, _near = 1;
+    float _far = 25, _near = 2;
     xm::mat4 persp = xm::perspective(xm::to_radians(70.0f), g_main_window.m_size.x/static_cast<float>(g_main_window.m_size.y), _near, _far, true);
     
     while (!stop)
@@ -195,87 +207,123 @@ int main(int argc, char* argv[])
         model = xm::translate(model, g_cube_pos);
 
         xm::mat4 view = xm::lookAt(g_eye_pos, g_eye_dir, g_eye_up);
+        
+        uint current_thread_count = current_exec.m_thread_count + 1;
+        uint per_thread = g_cube_vertices_size / current_thread_count;
 
-        for (int i = 0; i < sizeof(g_cube_indices) / sizeof(int); i += 3)
+        // vertex shading
+        current_exec.pushSync(
+            [
+                per_thread,
+                model,
+                view,
+                persp
+            ]
+            (uint idx, uint thread_count)
+            {
+                uint start = idx * per_thread;
+                uint end;
+                if(idx == thread_count - 1)
+                {
+                    end = g_cube_vertices_size;
+                }
+                else 
+                {
+                    end = start + per_thread;
+                }
+                for(uint i = start; i < end; ++i)
+                {
+                    xm::vec3 vert = g_cube_vertices[i].pos;
+                    xm::vec4 world = model * xm::vec4(vert, 1.0f);
+                    xm::vec4 look = view * world;
+                    xm::vec4 clip = persp * look;
+
+                    float w = clip.w;
+
+                    xm::vec3 ndc = xm::vec3(clip) / w;
+
+                    if (ndc.z > 1.0f ||
+                        ndc.z < 0.0f)
+                    {
+                        g_vertex_shader_outputs[i].skip = true;
+                        continue;
+                    }
+
+                    xm::vec2 uv = g_cube_vertices[i].uv;
+
+                    g_vertex_shader_outputs[i].ndc = ndc;
+                    g_vertex_shader_outputs[i].uv_div_w = uv / w;
+                    g_vertex_shader_outputs[i].w_recip = 1.0f / w;
+                    g_vertex_shader_outputs[i].skip = false;
+                }
+
+            }
+        );
+
+
+        // fragment shading
+        for (int i = 0; i < g_cube_indices_size; i += 3)
         {
-            xm::vec3 vert0 = g_cube_vertices[g_cube_indices[i]].pos;
-            xm::vec3 vert1 = g_cube_vertices[g_cube_indices[i + 1]].pos;
-            xm::vec3 vert2 = g_cube_vertices[g_cube_indices[i + 2]].pos;
-
-            xm::vec4 world0 = model * xm::vec4(vert0, 1.0f);
-            xm::vec4 world1 = model * xm::vec4(vert1, 1.0f);
-            xm::vec4 world2 = model * xm::vec4(vert2, 1.0f);
-
-            xm::vec4 look0 = view * world0;
-            xm::vec4 look1 = view * world1;
-            xm::vec4 look2 = view * world2;
-
-            xm::vec4 clip0 = persp * look0;
-            xm::vec4 clip1 = persp * look1;
-            xm::vec4 clip2 = persp * look2;
-
-            float w0 = clip0.w;
-            float w1 = clip1.w;
-            float w2 = clip2.w;
-
-            xm::vec3 ndc0 = xm::vec3(clip0) / clip0.w;
-            xm::vec3 ndc1 = xm::vec3(clip1) / clip1.w;
-            xm::vec3 ndc2 = xm::vec3(clip2) / clip2.w;
-            
-            if (ndc0.z > 1.0f ||
-                ndc0.z < 0.0f ||
-                ndc1.z > 1.0f ||
-                ndc1.z < 0.0f ||
-                ndc2.z > 1.0f ||
-                ndc2.z < 0.0f
-                )
+            bool skip = g_vertex_shader_outputs[g_cube_indices[i]].skip || 
+                g_vertex_shader_outputs[g_cube_indices[i + 1]].skip || 
+                g_vertex_shader_outputs[g_cube_indices[i + 2]].skip;
+            if(skip)
             {
                 continue;
             }
 
-            xm::vec2 uv0 = g_cube_vertices[g_cube_indices[i]].uv;
-            xm::vec2 uv1 = g_cube_vertices[g_cube_indices[i + 1]].uv;
-            xm::vec2 uv2 = g_cube_vertices[g_cube_indices[i + 2]].uv;
-            
+            xm::vec3 ndc0 = g_vertex_shader_outputs[g_cube_indices[i]].ndc;
+            xm::vec3 ndc1 = g_vertex_shader_outputs[g_cube_indices[i + 1]].ndc;
+            xm::vec3 ndc2 = g_vertex_shader_outputs[g_cube_indices[i + 2]].ndc;
+
+            float w0_recip = g_vertex_shader_outputs[g_cube_indices[i]].w_recip;
+            float w1_recip = g_vertex_shader_outputs[g_cube_indices[i + 1]].w_recip;
+            float w2_recip = g_vertex_shader_outputs[g_cube_indices[i + 2]].w_recip;
+
+            xm::vec2 uv0_div_w = g_vertex_shader_outputs[g_cube_indices[i]].uv_div_w;
+            xm::vec2 uv1_div_w = g_vertex_shader_outputs[g_cube_indices[i + 1]].uv_div_w;
+            xm::vec2 uv2_div_w = g_vertex_shader_outputs[g_cube_indices[i + 2]].uv_div_w;
+
             pushTriangle(g_max_intensity_symbol, xm::vec2(ndc0), xm::vec2(ndc1), xm::vec2(ndc2), current_exec,
-                [a = 0.1f, 
-                b = 0.5f, 
-                c = 1.0f,
-                zp0 = ndc0.z,
-                zp1 = ndc1.z,
-                zp2 = ndc2.z,
-                w0,
-                w1,
-                w2,
+                [
+                z0_proj = ndc0.z,
+                z1_proj = ndc1.z,
+                z2_proj = ndc2.z,
+                w0_recip,
+                w1_recip,
+                w2_recip,
                 width = g_main_window.m_size.x,
                 height = g_main_window.m_size.y,
-                uv0, uv1, uv2,
+                uv0_div_w, 
+                uv1_div_w, 
+                uv2_div_w,
                 &awesomeface_tex
                 ]
                 (char symbol, int x, int y, float alpha, float beta, float gamma)
+            {
+                if (x < 0 || x >= width || y < 0 || y >= height)
                 {
-                    if (x < 0 || x >= width || y < 0 || y >= height)
-                    {
-                        return;
-                    }
+                    return;
+                }
 
-                    float for_zbuf = zp0 * alpha + zp1 * beta + zp2 * gamma;
-                    
-                    float buffer_z = g_z_framebuffer.getValue(xm::ivec2(x, y));
+                float for_zbuf = z0_proj * alpha + z1_proj * beta + z2_proj * gamma;
 
-                    
-                    if(for_zbuf < buffer_z)
-                    {
-                        float current_z = 1.0f / ((1.0f / w0) * alpha + (1.0f / w1) * beta + (1.0f / w2) * gamma);
-                        xm::vec2 current_uv = current_z * ((uv0 / w0) * alpha + (uv1 / w1) * beta + (uv2 / w2) * gamma);
-                        //float intensity = a * alpha + b * beta + c * gamma;
-                        //char current_symbol = getIntensitySymbolF(intensity);
+                float buffer_z = g_z_framebuffer.getValue(xm::ivec2(x, y));
 
-                        char current_symbol = awesomeface_tex.getValueUV(current_uv);
-                        platform::drawPixel(x, y, current_symbol);
-                        g_z_framebuffer.setValue(xm::ivec2(x, y), for_zbuf);
-                    }
-                });
+                if (for_zbuf < buffer_z)
+                {
+                    float current_z = 1.0f / (w0_recip * alpha + w1_recip * beta + w2_recip * gamma);
+                    xm::vec2 current_uv = current_z * (uv0_div_w * alpha + uv1_div_w * beta + uv2_div_w * gamma);
+                    //float intensity = 0.1f * alpha + 0.5f * beta + 1.0f * gamma;
+                    //char current_symbol = getIntensitySymbolF(intensity);
+
+                    char current_symbol = awesomeface_tex.getValueUV(current_uv);
+                    platform::drawPixel(x, y, current_symbol);
+                    g_z_framebuffer.setValue(xm::ivec2(x, y), for_zbuf);
+                }
+            });
+
+
         }
 
         draw();
