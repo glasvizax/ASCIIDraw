@@ -1,6 +1,7 @@
 #include "Texture.h"
 
 #include "stb_image.h"
+#include <filesystem>
 
 Texture loadTexture(std::string_view filename)
 {
