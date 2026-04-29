@@ -136,10 +136,12 @@ int main(int argc, char* argv[])
 	g_main_framebuffer.init(g_main_window.m_size);
 	g_z_framebuffer.init(g_main_window.m_size);
 
-	float aspect = static_cast<float>(g_main_window.m_size.width) / (2 * static_cast<float>(g_main_window.m_size.height));
+	float aspect = static_cast<float>(g_main_window.m_size.width * 0.70f) / (2 * static_cast<float>(g_main_window.m_size.height));
 	g_camera.setAspectRatio(aspect);
 
 	Texture awesomeface_tex = loadTexture("face.jpg");
+	//Texture weapon_tex = loadTexture("weapon.jpg");
+
 	while (!g_stop)
 	{
 		g_main_framebuffer.clear(g_clear_symbol);

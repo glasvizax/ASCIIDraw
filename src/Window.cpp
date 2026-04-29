@@ -21,8 +21,8 @@ bool setConsoleSizeAndFont(HANDLE hOut, int width, int height)
 
 	if (GetCurrentConsoleFontEx(hOut, FALSE, &cfi))
 	{
-		cfi.dwFontSize.X = 8;
-		cfi.dwFontSize.Y = 8;
+		cfi.dwFontSize.X = 5;
+		cfi.dwFontSize.Y = 5;
 		wcscpy_s(cfi.FaceName, L"Consolas");
 
 		if (!SetCurrentConsoleFontEx(hOut, FALSE, &cfi))

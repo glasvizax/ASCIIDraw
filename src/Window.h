@@ -6,7 +6,7 @@
 class Window
 {
 public:
-	const xm::ivec2 m_size{ 300, 100 };
+	const xm::ivec2 m_size{ 900, 200 };
 
 	void init();
 };

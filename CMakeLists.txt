@@ -7,9 +7,11 @@ project(ASCIIDraw VERSION 0.1.1 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "data" OUTPUT_VARIABLE DATA_DIR)
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR ".external_libs" OUTPUT_VARIABLE EXTERNAL_LIBS_DIR)
 cmake_path(APPEND FETCHCONTENT_BASE_DIR ${EXTERNAL_LIBS_DIR} "fetch_content_libs")
+
+cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "data" OUTPUT_VARIABLE DATA_DIR)
+cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "src" OUTPUT_VARIABLE SRC_DIR)
 
 if(POLICY CMP0167)
     cmake_policy(SET CMP0167 NEW)
@@ -50,10 +52,12 @@ fetch_stb(
         stb_image_write.h 
 )
 
+# TODO: fix
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS 
-    src/*.h 
-    src/*.cpp
-)
+    ${SRC_DIR}/*.h 
+    ${SRC_DIR}/*.cpp
+)   
+
 add_executable(Main ${SRC_FILES})
 
 target_link_libraries(
@@ -63,12 +67,14 @@ target_link_libraries(
         stb
 ) 
 
-file(GLOB_RECURSE DATA CONFIGURE_DEPENDS data/*)
+file(GLOB_RECURSE DATA_FILES CONFIGURE_DEPENDS 
+    ${DATA_DIR}/*
+)
 
 target_sources(
     Main
     PRIVATE
-        ${DATA}
+        ${DATA_FILES}
 )
 
 target_compile_definitions(

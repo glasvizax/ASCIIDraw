@@ -38,6 +38,7 @@ public:
         m_buffer[getIndex(pos)] = value;
     }
 
+
     void clear(T clear_value)
     {
         if constexpr (sizeof(T) > 1)

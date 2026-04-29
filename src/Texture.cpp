@@ -3,7 +3,7 @@
 #include "stb_image.h"
 #include <filesystem>
 
-Texture loadTexture(std::string_view filename)
+Texture loadTexture(std::string_view filename, FilteringType filtering_type)
 {
     Texture tex;
     std::string path = g_data_path + std::string(filename);
@@ -13,7 +13,7 @@ Texture loadTexture(std::string_view filename)
 
     if (tex_data)
     {
-        tex.init(xm::ivec2(tex_width, tex_height), tex_data);
+        tex.init(xm::ivec2(tex_width, tex_height), tex_data, filtering_type);
     }
     else
     {
