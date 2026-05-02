@@ -2,10 +2,23 @@ cmake_minimum_required(VERSION 3.30)
 
 include(FetchContent)
 
-project(ASCIIDraw VERSION 0.1.1 LANGUAGES CXX)
+macro(set_policy policy state)
+    if(POLICY ${policy})
+        cmake_policy(SET ${policy} ${state})
+    else()
+        message(WARNING "Policy ${policy} is not available in this CMake version")
+    endif()
+endmacro()
+
+set_policy(CMP0167 NEW)
+set_policy(CMP0168 NEW)
+set_policy(CMP0135 NEW)
+set_policy(CMP0091 NEW)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+project(ASCIIDraw VERSION 0.1.1 LANGUAGES CXX)
 
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR ".external_libs" OUTPUT_VARIABLE EXTERNAL_LIBS_DIR)
 cmake_path(APPEND FETCHCONTENT_BASE_DIR ${EXTERNAL_LIBS_DIR} "fetch_content_libs")
@@ -13,15 +26,7 @@ cmake_path(APPEND FETCHCONTENT_BASE_DIR ${EXTERNAL_LIBS_DIR} "fetch_content_libs
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "data" OUTPUT_VARIABLE DATA_DIR)
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "src" OUTPUT_VARIABLE SRC_DIR)
 
-if(POLICY CMP0167)
-    cmake_policy(SET CMP0167 NEW)
-endif()
-
-if(POLICY CMP0135)
-    cmake_policy(SET CMP0135 NEW)
-endif()
-
-set(CMAKE_POLICY_DEFAULT_CMP0168 NEW)
+find_package(assimp REQUIRED)
 
 FetchContent_Declare(
     XPERCMakeUtils
@@ -53,7 +58,10 @@ fetch_stb(
 )
 
 # TODO: fix
-file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS 
+file(
+    GLOB_RECURSE 
+    SRC_FILES 
+    CONFIGURE_DEPENDS 
     ${SRC_DIR}/*.h 
     ${SRC_DIR}/*.cpp
 )   
@@ -65,9 +73,13 @@ target_link_libraries(
     PRIVATE 
         XPER::Math
         stb
+        assimp::assimp
 ) 
 
-file(GLOB_RECURSE DATA_FILES CONFIGURE_DEPENDS 
+file(
+    GLOB_RECURSE 
+    DATA_FILES 
+    CONFIGURE_DEPENDS 
     ${DATA_DIR}/*
 )
 
