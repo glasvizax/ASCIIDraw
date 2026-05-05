@@ -66,7 +66,23 @@ file(
     ${SRC_DIR}/*.cpp
 )   
 
-add_executable(Main ${SRC_FILES})
+file(
+    GLOB_RECURSE 
+    DATA_FILES 
+    CONFIGURE_DEPENDS 
+    ${DATA_DIR}/*
+)
+
+set_source_files_properties(
+    ${DATA_FILES} 
+    PROPERTIES
+        HEADER_FILE_ONLY ON
+)
+
+add_executable(Main ${SRC_FILES} ${DATA_FILES})
+
+source_group(Sources FILES ${SRC_FILES})
+source_group(Data FILES ${DATA_FILES})
 
 target_link_libraries(
     Main 
@@ -75,19 +91,6 @@ target_link_libraries(
         stb
         assimp::assimp
 ) 
-
-file(
-    GLOB_RECURSE 
-    DATA_FILES 
-    CONFIGURE_DEPENDS 
-    ${DATA_DIR}/*
-)
-
-target_sources(
-    Main
-    PRIVATE
-        ${DATA_FILES}
-)
 
 target_compile_definitions(
     Main

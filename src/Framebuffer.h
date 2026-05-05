@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <xm/xm.h>
 #include <xm/math_helpers.h>
+#include <vector>
 
 template<typename T>
 class Framebuffer
@@ -12,14 +13,22 @@ class Framebuffer
     xm::ivec2 m_size;
     uint32_t m_buff_size;
 
-    friend void draw();
-
 public:
     void init(xm::ivec2 size)
     {
         m_size = size;
         m_buff_size = m_size.x * m_size.y;
         m_buffer.resize(m_buff_size);
+    }
+
+    T* getBuffer()
+    {
+        return m_buffer.data();
+    }
+
+    const T* getBuffer() const
+    {
+        return m_buffer.data();
     }
 
     size_t getIndex(xm::ivec2 pos)

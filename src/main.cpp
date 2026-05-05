@@ -24,16 +24,11 @@
 
 using uint = unsigned int;
 
-void draw();
 void processInput();
 
 void pushPixelRaw(char symbol, xm::ivec2 pos);
 
-Window g_main_window;
-
-CharFramebuffer g_main_framebuffer;
-FloatFramebuffer g_z_framebuffer;
-
+ConsoleWindow g_main_window;
 std::atomic<bool> g_stop{ false };
 
 void inputThread();
@@ -109,15 +104,182 @@ xm::vec3 g_cube_pos{ 1.0f, 0.0f, -8.0f };
 
 Camera g_camera;
 
-struct VertexShaderOutput
+template<typename UserVertexShaderOutput>
+struct InternalVertexShaderOutput
 {
 	xm::vec3 ndc;
-	xm::vec2 uv_div_w;
 	float w_recip;
 	bool skip;
+	UserVertexShaderOutput user_output;
 };
 
-VertexShaderOutput g_vertex_shader_outputs[g_cube_vertices_size];
+template <typename VertexType,
+	typename UserVertexShaderInput,
+	typename UserVertexShaderOutput,
+	typename UserFragmentShaderInput>
+class ShaderProgram
+{
+public:
+	using VertexShaderType = void (*)(xm::vec4&, VertexType&, UserVertexShaderInput&, UserVertexShaderOutput&);
+	using FragmentShaderType = char (*)(UserVertexShaderOutput&, UserFragmentShaderInput&);
+
+	ShaderProgram(VertexShaderType vertex_shader, FragmentShaderType fragment_shader)
+		: m_vertex_shader(vertex_shader), m_fragment_shader(fragment_shader) {
+	}
+
+	void executeVertexShader(xm::vec4& position, VertexType& vertex,
+		UserVertexShaderInput& user_vertex_input,
+		UserVertexShaderOutput& user_vertex_output)
+	{
+		m_vertex_shader(position, vertex, user_vertex_input, user_vertex_output);
+	}
+
+	char executeFragmentShader(UserVertexShaderOutput& user_vertex_output,
+		UserFragmentShaderInput& user_fragment_input)
+	{
+		return m_fragment_shader(user_vertex_output, user_fragment_input);
+	}
+
+private:
+	VertexShaderType m_vertex_shader;
+	FragmentShaderType m_fragment_shader;
+};
+
+
+template<typename UserVertexShaderOutput, typename UserVertexShaderInput, typename UserFragmentShaderInput, typename VertexType, std::integral I, std::size_t Extent1, std::size_t Extent2>
+void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, UserVertexShaderOutput, UserFragmentShaderInput>& shader_program, std::span<VertexType, Extent1> vertices, std::span<I, Extent2> indices, UserVertexShaderInput& vertex_input, UserFragmentShaderInput& fragment_input, BroadcastExecutor& exec, ConsoleWindow& main_window)
+{
+	static std::vector<InternalVertexShaderOutput<UserVertexShaderOutput>> internal_output(512 < vertices.size() ? vertices.size() : 512);
+	
+	// vertex shading
+	internal_output.resize(vertices.size());
+
+	exec.foreachSync(
+		[
+			&shader_program,
+			&vertex_input
+		]
+		(VertexType& elem, uint idx)
+		{
+			UserVertexShaderOutput user_output;
+			xm::vec4 position;
+			shader_program.executeVertexShader(position, elem, vertex_input, user_output);
+
+			//TODO: skip calculations if equals 1
+			float w = position.w;
+			xm::vec3 ndc = xm::vec3(position) / w;
+
+			if (ndc.z > 1.0f ||
+				ndc.z < 0.0f)
+			{
+				internal_output[idx].skip = true;
+				return;
+			}
+
+			xm::vec2 uv = g_cube_vertices[idx].uv;
+
+			internal_output[idx].ndc = ndc;
+			internal_output[idx].w_recip = 1.0f / w;
+			internal_output[idx].skip = false;
+
+			//TODO: more safe way
+			float* fptr = reinterpret_cast<float*>(&user_output);
+			uint sz = sizeof(UserVertexShaderOutput) / sizeof(float);
+			for (uint i = 0; i < sz; ++i)
+			{
+				fptr[i] /= w;
+			}
+			internal_output[idx].user_output = user_output;
+		},
+		vertices
+	);
+
+	// fragment shading
+	for (int i = 0; i < indices.size(); i += 3)
+	{
+		bool skip = internal_output[indices[i]].skip ||
+			internal_output[indices[i + 1]].skip ||
+			internal_output[indices[i + 2]].skip;
+		if (skip)
+		{
+			continue;
+		}
+
+		xm::vec3 ndc0 = internal_output[indices[i]].ndc;
+		xm::vec3 ndc1 = internal_output[indices[i + 1]].ndc;
+		xm::vec3 ndc2 = internal_output[indices[i + 2]].ndc;
+
+		float w0_recip = internal_output[indices[i]].w_recip;
+		float w1_recip = internal_output[indices[i + 1]].w_recip;
+		float w2_recip = internal_output[indices[i + 2]].w_recip;
+		
+		UserVertexShaderOutput& uo0 = internal_output[indices[i]].user_output;
+		UserVertexShaderOutput& uo1 = internal_output[indices[i + 1]].user_output;
+		UserVertexShaderOutput& uo2 = internal_output[indices[i + 2]].user_output;
+
+		pushTriangle(g_max_intensity_symbol, xm::vec2(ndc0), xm::vec2(ndc1), xm::vec2(ndc2), exec,
+			[
+				z0_proj = ndc0.z,
+				z1_proj = ndc1.z,
+				z2_proj = ndc2.z,
+				w0_recip,
+				w1_recip,
+				w2_recip,
+				&main_window,
+				&uo0, // TODO: IMPROVE!!!
+				&uo1, // TODO: IMPROVE!!!
+				&uo2, // TODO: IMPROVE!!!
+				&fragment_input,
+				&shader_program
+			]
+			(char symbol, int x, int y, float alpha, float beta, float gamma)
+		{
+			if (x < 0 || x >= main_window.m_size.width || y < 0 || y >= main_window.m_size.height)
+			{
+				return;
+			}
+
+			float for_zbuf = z0_proj * alpha + z1_proj * beta + z2_proj * gamma;
+
+			float buffer_z = main_window.m_z_framebuffer.getValue(xm::ivec2(x, y));
+
+			if (for_zbuf < buffer_z)
+			{
+				float current_z = 1.0f / (w0_recip * alpha + w1_recip * beta + w2_recip * gamma);
+				
+				//TODO: more safe way
+				UserVertexShaderOutput current_uo;
+				float* fptr = reinterpret_cast<float*>(&current_uo);
+
+				float* fptr0 = reinterpret_cast<float*>(&uo0);
+				for (uint i = 0; i < sizeof(UserVertexShaderOutput) / sizeof(float); ++i)
+				{
+					fptr[i] = fptr0[i] * current_z * alpha;
+				}
+
+				//TODO: more safe way
+				float* fptr1 = reinterpret_cast<float*>(&uo1);
+				for (uint i = 0; i < sizeof(UserVertexShaderOutput) / sizeof(float); ++i)
+				{
+					fptr[i] += fptr1[i] * current_z * beta;
+				}
+
+				//TODO: more safe way
+				float* fptr2 = reinterpret_cast<float*>(&uo2);
+				for (uint i = 0; i < sizeof(UserVertexShaderOutput) / sizeof(float); ++i)
+				{
+					fptr[i] += fptr2[i] * current_z * gamma;
+				}
+				
+				char current_symbol = shader_program.executeFragmentShader(current_uo, fragment_input);
+				
+				main_window.m_main_framebuffer.setValue(xm::ivec2(x, y), current_symbol);
+				main_window.m_z_framebuffer.setValue(xm::ivec2(x, y), for_zbuf);
+			}
+		});
+	}
+
+}
 
 int main(int argc, char* argv[])
 {
@@ -133,19 +295,70 @@ int main(int argc, char* argv[])
 
 	g_main_window.init();
 	pushWindowSize(g_main_window.m_size);
-	g_main_framebuffer.init(g_main_window.m_size);
-	g_z_framebuffer.init(g_main_window.m_size);
+	g_camera.setAspectRatio(g_main_window.m_aspect);
 
-	float aspect = static_cast<float>(g_main_window.m_size.width * 0.70f) / (2 * static_cast<float>(g_main_window.m_size.height));
-	g_camera.setAspectRatio(aspect);
-
-	Texture awesomeface_tex = loadTexture("face.jpg");
+	//Texture awesomeface_tex = loadTexture("awesomeface.png", FilteringType::BILINEAR);
 	//Texture weapon_tex = loadTexture("weapon.jpg");
+
+	Texture checkerboard_tex;
+	checkerboard_tex.init(xm::ivec2(50, 50), nullptr, FilteringType::NEAREST);
+	checkerboard_tex.fillPattern([](xm::vec2 uv)
+		{
+			int x = uv.u * 8.0f;
+			int y = uv.y * 8.0f;
+
+			int sum = (x + y) % 2;
+			if (sum == 0) 
+			{
+				return getIntensitySymbolF(0.0f);
+			}
+			else 
+			{
+				return getIntensitySymbolF(1.0f);
+			}
+			
+		}, current_exec);
+	
+	Texture current_texture = checkerboard_tex;
+
+	struct _vertex_output
+	{
+		xm::vec2 uv;
+	};
+
+	struct _vertex_input
+	{
+		xm::mat4& model;
+		xm::mat4& view;
+		xm::mat4& perspective;
+	};
+
+	struct _fragment_input
+	{
+		Texture& texture;
+	};
+
+	ShaderProgram<Vertex, _vertex_input, _vertex_output, _fragment_input> shader_program(
+		//vertex shader
+		[](xm::vec4& position, Vertex& vertex, _vertex_input& vs_in, _vertex_output& vs_out) -> void
+		{
+			xm::vec3 vert = vertex.pos;
+			xm::vec4 world = vs_in.model * xm::vec4(vert, 1.0f);
+			xm::vec4 look = vs_in.view * world;
+			xm::vec4 clip = vs_in.perspective * look;
+			vs_out.uv = vertex.uv;
+			position = clip;
+		},
+		//fragment shader
+		[](_vertex_output& vs_in, _fragment_input& fs_in) -> char
+		{
+			return fs_in.texture.getValueUV(vs_in.uv);
+		}
+	);
 
 	while (!g_stop)
 	{
-		g_main_framebuffer.clear(g_clear_symbol);
-		g_z_framebuffer.clear(1.0f);
+		g_main_window.clear();
 
 		auto time = std::chrono::steady_clock::now();
 		float delta = std::chrono::duration<float>(time - last_time).count();
@@ -161,105 +374,12 @@ int main(int argc, char* argv[])
 		xm::mat4 persp = g_camera.getPerspectiveMatrix();
 		xm::mat4 view = g_camera.getViewMatrix();
 
-		// vertex shading
-		current_exec.foreachSync(
-			[
-				model,
-				view,
-				persp
-			]
-			(VertexShaderOutput& elem, uint idx)
-			{
-				xm::vec3 vert = g_cube_vertices[idx].pos;
-				xm::vec4 world = model * xm::vec4(vert, 1.0f);
-				xm::vec4 look = view * world;
-				xm::vec4 clip = persp * look;
+		_vertex_input vs_in{ model, view, persp };
+		_fragment_input fs_in{ current_texture };
 
-				float w = clip.w;
+		executeRenderingPipeline(shader_program, std::span(g_cube_vertices), std::span(g_cube_indices), vs_in, fs_in, current_exec, g_main_window);
 
-				xm::vec3 ndc = xm::vec3(clip) / w;
-
-				if (ndc.z > 1.0f ||
-					ndc.z < 0.0f)
-				{
-					elem.skip = true;
-					return;
-				}
-
-				xm::vec2 uv = g_cube_vertices[idx].uv;
-
-				elem.ndc = ndc;
-				elem.uv_div_w = uv / w;
-				elem.w_recip = 1.0f / w;
-				elem.skip = false;
-			},
-			std::span(g_vertex_shader_outputs)
-		);
-
-		// fragment shading
-		for (int i = 0; i < g_cube_indices_size; i += 3)
-		{
-			bool skip = g_vertex_shader_outputs[g_cube_indices[i]].skip ||
-				g_vertex_shader_outputs[g_cube_indices[i + 1]].skip ||
-				g_vertex_shader_outputs[g_cube_indices[i + 2]].skip;
-			if (skip)
-			{
-				continue;
-			}
-
-			xm::vec3 ndc0 = g_vertex_shader_outputs[g_cube_indices[i]].ndc;
-			xm::vec3 ndc1 = g_vertex_shader_outputs[g_cube_indices[i + 1]].ndc;
-			xm::vec3 ndc2 = g_vertex_shader_outputs[g_cube_indices[i + 2]].ndc;
-
-			float w0_recip = g_vertex_shader_outputs[g_cube_indices[i]].w_recip;
-			float w1_recip = g_vertex_shader_outputs[g_cube_indices[i + 1]].w_recip;
-			float w2_recip = g_vertex_shader_outputs[g_cube_indices[i + 2]].w_recip;
-
-			xm::vec2 uv0_div_w = g_vertex_shader_outputs[g_cube_indices[i]].uv_div_w;
-			xm::vec2 uv1_div_w = g_vertex_shader_outputs[g_cube_indices[i + 1]].uv_div_w;
-			xm::vec2 uv2_div_w = g_vertex_shader_outputs[g_cube_indices[i + 2]].uv_div_w;
-
-			pushTriangle(g_max_intensity_symbol, xm::vec2(ndc0), xm::vec2(ndc1), xm::vec2(ndc2), current_exec,
-				[
-					z0_proj = ndc0.z,
-					z1_proj = ndc1.z,
-					z2_proj = ndc2.z,
-					w0_recip,
-					w1_recip,
-					w2_recip,
-					width = g_main_window.m_size.x,
-					height = g_main_window.m_size.y,
-					uv0_div_w,
-					uv1_div_w,
-					uv2_div_w,
-					&awesomeface_tex
-				]
-				(char symbol, int x, int y, float alpha, float beta, float gamma)
-			{
-				if (x < 0 || x >= width || y < 0 || y >= height)
-				{
-					return;
-				}
-
-				float for_zbuf = z0_proj * alpha + z1_proj * beta + z2_proj * gamma;
-
-				float buffer_z = g_z_framebuffer.getValue(xm::ivec2(x, y));
-
-				if (for_zbuf < buffer_z)
-				{
-					float current_z = 1.0f / (w0_recip * alpha + w1_recip * beta + w2_recip * gamma);
-					xm::vec2 current_uv = current_z * (uv0_div_w * alpha + uv1_div_w * beta + uv2_div_w * gamma);
-					//float intensity = 0.1f * alpha + 0.5f * beta + 1.0f * gamma;
-					//char current_symbol = getIntensitySymbolF(intensity);
-
-					char current_symbol = awesomeface_tex.getValueUV(current_uv);
-					platform::drawPixel(x, y, current_symbol);
-					g_z_framebuffer.setValue(xm::ivec2(x, y), for_zbuf);
-				}
-			});
-		}
-
-		draw();
+		g_main_window.draw();
 	}
 	input_thread.join();
 }
@@ -294,17 +414,7 @@ wchar_t getLastInputWChar()
 
 void pushPixelRaw(char symbol, xm::ivec2 pos)
 {
-	g_main_framebuffer.setValue(pos, symbol);
-}
-
-void draw()
-{
-	std::cout << "\x1b[H";
-
-	for (int y = 0; y < g_main_framebuffer.m_size.y; ++y)
-	{
-		std::cout.write(&g_main_framebuffer.m_buffer[y * g_main_framebuffer.m_size.x], g_main_framebuffer.m_size.x);
-	}
+	g_main_window.m_main_framebuffer.setValue(pos, symbol);
 }
 
 void processInput()
