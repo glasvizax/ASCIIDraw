@@ -20,8 +20,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(ASCIIDraw VERSION 0.1.1 LANGUAGES CXX)
 
-cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR ".external_libs" OUTPUT_VARIABLE EXTERNAL_LIBS_DIR)
-cmake_path(APPEND FETCHCONTENT_BASE_DIR ${EXTERNAL_LIBS_DIR} "fetch_content_libs")
+cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "external_libs" OUTPUT_VARIABLE EXTERNAL_LIBS_DIR)
+cmake_path(SET FETCHCONTENT_BASE_DIR ${EXTERNAL_LIBS_DIR})
 
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "data" OUTPUT_VARIABLE DATA_DIR)
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "src" OUTPUT_VARIABLE SRC_DIR)
@@ -31,7 +31,7 @@ find_package(assimp REQUIRED)
 FetchContent_Declare(
     XPERCMakeUtils
     GIT_REPOSITORY https://github.com/glasvizax/XPERCMakeUtils
-    GIT_TAG v1.3
+    GIT_TAG v1.4
 )
 
 FetchContent_Declare(
@@ -46,15 +46,13 @@ FetchContent_MakeAvailable(
     XPERMath
 )
 
-list(APPEND CMAKE_MODULE_PATH "${XPERCMakeUtils_SOURCE_DIR}")
-
 include(fetch_stb)
 
 fetch_stb(
-    SRC_PATH ${EXTERNAL_LIBS_DIR}
+    DOWNLOAD_PATH ${EXTERNAL_LIBS_DIR}
     HEADERS 
-        stb_image.h 
-        stb_image_write.h 
+        stb_image 
+        stb_image_write
 )
 
 # TODO: fix

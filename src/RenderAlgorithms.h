@@ -74,7 +74,8 @@ void pushTriangleBarycenterRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 
         horizontal = true;
     }
 
-    exec.pushSync([
+    exec.pushSync(
+        [
         _per_thread = per_thread,
         _bbmin = bbmin,
         _bbmax = bbmax,
@@ -100,44 +101,35 @@ void pushTriangleBarycenterRaw(char symbol, xm::ivec2 a, xm::ivec2 b, xm::ivec2 
 
             curr_y += _bbmin.y;
             curr_x += _bbmin.x;
+
+            int end_x, end_y;
+
             if (thread_idx != (thread_count - 1))
             {
-                for (int x = 0; x < _per_thread.x; ++x)
-                {
-                    for (int y = 0; y < _per_thread.y; ++y)
-                    {
-                        xm::ivec2 curr(curr_x + x, curr_y + y);
-                        float alpha = xm::cross2D(_b - curr, _c - curr) / _triangle_area;
-                        float beta = xm::cross2D(_c - curr, _a - curr) / _triangle_area;
-                        float gamma = xm::cross2D(_a - curr, _b - curr) / _triangle_area;
-
-                        if (alpha >= 0 && beta >= 0 && gamma >= 0)
-                        {
-                            fragment_shader(_symbol, curr.x, curr.y, alpha, beta, gamma);
-                        }
-                    }
-                }
+                end_x = _per_thread.x;
+                end_y = _per_thread.y;
             }
-            else
+            else 
             {
-                for (int x = curr_x; x <= _bbmax.x; ++x)
-                {
-                    for (int y = curr_y; y <= _bbmax.y; ++y)
-                    {
-                        xm::ivec2 curr(x, y);
-                        float alpha = xm::cross2D(_b - curr, _c - curr) / _triangle_area;
-                        float beta = xm::cross2D(_c - curr, _a - curr) / _triangle_area;
-                        float gamma = xm::cross2D(_a - curr, _b - curr) / _triangle_area;
-
-                        if (alpha >= 0 && beta >= 0 && gamma >= 0)
-                        {
-                            fragment_shader(_symbol, curr.x, curr.y, alpha, beta, gamma);
-                        }
-                    }
-                }
-
+                end_x = _bbmax.x - curr_x + 1;
+                end_y = _bbmax.y - curr_y + 1;
             }
 
+            for (int x = 0; x < end_x; ++x)
+            {
+                for (int y = 0; y < end_y; ++y)
+                {
+                    xm::ivec2 curr(curr_x + x, curr_y + y);
+                    float alpha = xm::cross2D(_b - curr, _c - curr) / _triangle_area;
+                    float beta = xm::cross2D(_c - curr, _a - curr) / _triangle_area;
+                    float gamma = xm::cross2D(_a - curr, _b - curr) / _triangle_area;
+
+                    if (alpha >= 0 && beta >= 0 && gamma >= 0)
+                    {
+                        fragment_shader(_symbol, curr.x, curr.y, alpha, beta, gamma);
+                    }
+                }
+            }
         });
 }
 

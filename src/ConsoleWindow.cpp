@@ -106,6 +106,6 @@ void ConsoleWindow::draw()
 
 void ConsoleWindow::clear()
 {
-	m_main_framebuffer.clear(g_clear_symbol);
+	m_main_framebuffer.clear(m_clear_symbol);
 	m_z_framebuffer.clear(1.0f);
 }

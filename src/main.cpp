@@ -13,14 +13,14 @@
 
 #include "Platform.h"
 #include "ParticlesEngine.h"
-#include "RenderAlgorithms.h"
+//#include "RenderAlgorithms.h"
 #include "RenderUtils.h"
 #include "BroadcastExecutor.h"
 #include "Framebuffer.h"
 #include "Texture.h"
 #include "IntensityUtils.h"
 #include "Camera.h"
-#include "Window.h"
+#include "ConsoleWindow.h"
 
 using uint = unsigned int;
 
@@ -145,10 +145,39 @@ private:
 	FragmentShaderType m_fragment_shader;
 };
 
+template<typename UserVertexShaderOutput>
+void computeVertexOutputForFragment(
+	float correct_z,
+	float alpha, float beta, float gamma, 
+	UserVertexShaderOutput a, UserVertexShaderOutput b, UserVertexShaderOutput c, UserVertexShaderOutput& output)
+{
+	float* fptr = reinterpret_cast<float*>(&output);
+
+	float* fptr0 = reinterpret_cast<float*>(&a);
+	for (uint i = 0; i < sizeof(UserVertexShaderOutput) / sizeof(float); ++i)
+	{
+		fptr[i] = fptr0[i] * correct_z * alpha;
+	}
+
+	//TODO: more safe way
+	float* fptr1 = reinterpret_cast<float*>(&b);
+	for (uint i = 0; i < sizeof(UserVertexShaderOutput) / sizeof(float); ++i)
+	{
+		fptr[i] += fptr1[i] * correct_z * beta;
+	}
+
+	//TODO: more safe way
+	float* fptr2 = reinterpret_cast<float*>(&c);
+	for (uint i = 0; i < sizeof(UserVertexShaderOutput) / sizeof(float); ++i)
+	{
+		fptr[i] += fptr2[i] * correct_z * gamma;
+	}
+}
 
 template<typename UserVertexShaderOutput, typename UserVertexShaderInput, typename UserFragmentShaderInput, typename VertexType, std::integral I, std::size_t Extent1, std::size_t Extent2>
 void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, UserVertexShaderOutput, UserFragmentShaderInput>& shader_program, std::span<VertexType, Extent1> vertices, std::span<I, Extent2> indices, UserVertexShaderInput& vertex_input, UserFragmentShaderInput& fragment_input, BroadcastExecutor& exec, ConsoleWindow& main_window)
 {
+	static_assert(sizeof(UserVertexShaderOutput) % sizeof(float) == 0 && "UserVertexShaderOutput must contain only float-point data");
 	static std::vector<InternalVertexShaderOutput<UserVertexShaderOutput>> internal_output(512 < vertices.size() ? vertices.size() : 512);
 	
 	// vertex shading
@@ -209,16 +238,57 @@ void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, U
 		xm::vec3 ndc1 = internal_output[indices[i + 1]].ndc;
 		xm::vec3 ndc2 = internal_output[indices[i + 2]].ndc;
 
+		xm::ivec2 a = NDCtoPixeli(xm::vec2(ndc0));
+		xm::ivec2 b = NDCtoPixeli(xm::vec2(ndc1));
+		xm::ivec2 c = NDCtoPixeli(xm::vec2(ndc2));
+
 		float w0_recip = internal_output[indices[i]].w_recip;
 		float w1_recip = internal_output[indices[i + 1]].w_recip;
 		float w2_recip = internal_output[indices[i + 2]].w_recip;
-		
+
 		UserVertexShaderOutput& uo0 = internal_output[indices[i]].user_output;
 		UserVertexShaderOutput& uo1 = internal_output[indices[i + 1]].user_output;
 		UserVertexShaderOutput& uo2 = internal_output[indices[i + 2]].user_output;
 
-		pushTriangle(g_max_intensity_symbol, xm::vec2(ndc0), xm::vec2(ndc1), xm::vec2(ndc2), exec,
+		xm::ivec2 bbmin, bbmax;
+		bbmin.x = std::min(std::min(a.x, b.x), c.x);
+		bbmin.y = std::min(std::min(a.y, b.y), c.y);
+		bbmax.x = std::max(std::max(a.x, b.x), c.x);
+		bbmax.y = std::max(std::max(a.y, b.y), c.y);
+
+		float triangle_area = xm::cross2D(b - a, c - a);
+
+		if (triangle_area == 0)
+		{
+			continue;
+		}
+
+		xm::ivec2 per_thread;
+		int width = bbmax.x - bbmin.x + 1, height = bbmax.y - bbmin.y + 1;
+		int current_thread_count = exec.m_thread_count + 1;
+		bool horizontal = false;
+		if (height > width)
+		{
+			per_thread.x = width / current_thread_count;
+			per_thread.y = height;
+		}
+		else
+		{
+			per_thread.x = width;
+			per_thread.y = height / current_thread_count;
+			horizontal = true;
+		}
+
+		exec.pushSync(
 			[
+				_per_thread = per_thread,
+				_bbmin = bbmin,
+				_bbmax = bbmax,
+				_triangle_area = triangle_area,
+				_a = a,
+				_b = b,
+				_c = c,
+				_horizontal = horizontal,
 				z0_proj = ndc0.z,
 				z1_proj = ndc1.z,
 				z2_proj = ndc2.z,
@@ -232,53 +302,110 @@ void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, U
 				&fragment_input,
 				&shader_program
 			]
-			(char symbol, int x, int y, float alpha, float beta, float gamma)
+			(unsigned int thread_idx, unsigned int thread_count)
 		{
-			if (x < 0 || x >= main_window.m_size.width || y < 0 || y >= main_window.m_size.height)
+			int curr_y, curr_x;
+			if (_horizontal)
 			{
-				return;
+				curr_x = 0;
+				curr_y = thread_idx * _per_thread.y;
+			}
+			else
+			{
+				curr_x = thread_idx * _per_thread.x;
+				curr_y = 0;
 			}
 
-			float for_zbuf = z0_proj * alpha + z1_proj * beta + z2_proj * gamma;
+			curr_y += _bbmin.y;
+			curr_x += _bbmin.x;
 
-			float buffer_z = main_window.m_z_framebuffer.getValue(xm::ivec2(x, y));
+			int end_x, end_y;
 
-			if (for_zbuf < buffer_z)
+			if (thread_idx != (thread_count - 1))
 			{
-				float current_z = 1.0f / (w0_recip * alpha + w1_recip * beta + w2_recip * gamma);
-				
-				//TODO: more safe way
-				UserVertexShaderOutput current_uo;
-				float* fptr = reinterpret_cast<float*>(&current_uo);
+				end_x = _per_thread.x;
+				end_y = _per_thread.y;
+			}
+			else
+			{
+				end_x = _bbmax.x - curr_x + 1;
+				end_y = _bbmax.y - curr_y + 1;
+			}
 
-				float* fptr0 = reinterpret_cast<float*>(&uo0);
-				for (uint i = 0; i < sizeof(UserVertexShaderOutput) / sizeof(float); ++i)
+			for (int x = 0; x < end_x; ++x)
+			{
+				for (int y = 0; y < end_y; ++y)
 				{
-					fptr[i] = fptr0[i] * current_z * alpha;
-				}
+					xm::ivec2 curr(curr_x + x, curr_y + y);
+					float alpha = xm::cross2D(_b - curr, _c - curr) / _triangle_area;
+					float beta = xm::cross2D(_c - curr, _a - curr) / _triangle_area;
+					float gamma = xm::cross2D(_a - curr, _b - curr) / _triangle_area;
 
-				//TODO: more safe way
-				float* fptr1 = reinterpret_cast<float*>(&uo1);
-				for (uint i = 0; i < sizeof(UserVertexShaderOutput) / sizeof(float); ++i)
-				{
-					fptr[i] += fptr1[i] * current_z * beta;
-				}
+					if (alpha >= 0 && beta >= 0 && gamma >= 0)
+					{
+						if (curr.x < 0 || curr.x >= main_window.m_size.width || curr.y < 0 || curr.y >= main_window.m_size.height)
+						{
+							continue;
+						}
 
-				//TODO: more safe way
-				float* fptr2 = reinterpret_cast<float*>(&uo2);
-				for (uint i = 0; i < sizeof(UserVertexShaderOutput) / sizeof(float); ++i)
-				{
-					fptr[i] += fptr2[i] * current_z * gamma;
+						float for_zbuf = z0_proj * alpha + z1_proj * beta + z2_proj * gamma;
+
+						float buffer_z = main_window.m_z_framebuffer.getValue(curr);
+
+						if (for_zbuf < buffer_z)
+						{
+							float correct_z = 1.0f / (w0_recip * alpha + w1_recip * beta + w2_recip * gamma);
+							char current_symbol;
+							
+							float min = std::min({ alpha, beta, gamma });
+							if (min < 0.01f)
+							{
+								int covered = 0;
+								float intensity = 0.0f;
+
+								for (float sx : {-1.0f, -0.5f, 0.5f, 1.0f})
+								{
+									for (float sy : {-1.0f, -0.5f, 0.5f, 1.0f})
+									{
+										xm::vec2 curr_i(static_cast<float>(curr.x) + sx, static_cast<float>(curr.y) + sy);
+
+										float alpha_i = xm::cross2D(xm::vec2(_b) - curr_i, xm::vec2(_c) - curr_i) / _triangle_area;
+										float beta_i = xm::cross2D(xm::vec2(_c) - curr_i, xm::vec2(_a) - curr_i) / _triangle_area;
+										float gamma_i = xm::cross2D(xm::vec2(_a) - curr_i, xm::vec2(_b) - curr_i) / _triangle_area;
+
+										if (alpha_i >= 0 && beta_i >= 0 && gamma_i >= 0)
+										{
+											++covered;
+											UserVertexShaderOutput current_uo_i;
+											computeVertexOutputForFragment(correct_z, alpha_i, beta_i, gamma_i, uo0, uo1, uo2, current_uo_i);
+
+											intensity += getSymbolIntensity(shader_program.executeFragmentShader(current_uo_i, fragment_input));
+										}
+									}
+								}
+
+								if (covered > 0)
+								{
+									intensity /= 16.0f;
+									current_symbol = getIntensitySymbolUI(static_cast<uint>(intensity + 0.5f));
+									main_window.m_main_framebuffer.setValue(curr, current_symbol);
+								}
+							}
+							else 
+							{
+								UserVertexShaderOutput current_uo;
+								computeVertexOutputForFragment(correct_z, alpha, beta, gamma, uo0, uo1, uo2, current_uo);
+								current_symbol = shader_program.executeFragmentShader(current_uo, fragment_input);
+								main_window.m_main_framebuffer.setValue(curr, current_symbol);
+							}
+
+							main_window.m_z_framebuffer.setValue(curr, for_zbuf);
+						}
+					}
 				}
-				
-				char current_symbol = shader_program.executeFragmentShader(current_uo, fragment_input);
-				
-				main_window.m_main_framebuffer.setValue(xm::ivec2(x, y), current_symbol);
-				main_window.m_z_framebuffer.setValue(xm::ivec2(x, y), for_zbuf);
 			}
 		});
 	}
-
 }
 
 int main(int argc, char* argv[])
@@ -299,13 +426,13 @@ int main(int argc, char* argv[])
 
 	//Texture awesomeface_tex = loadTexture("awesomeface.png", FilteringType::BILINEAR);
 	//Texture weapon_tex = loadTexture("weapon.jpg");
-
+	
 	Texture checkerboard_tex;
-	checkerboard_tex.init(xm::ivec2(50, 50), nullptr, FilteringType::NEAREST);
+	checkerboard_tex.init(xm::ivec2(40, 40), nullptr, FilteringType::BILINEAR);
 	checkerboard_tex.fillPattern([](xm::vec2 uv)
 		{
-			int x = uv.u * 8.0f;
-			int y = uv.y * 8.0f;
+			int x = uv.u * 4.0f;
+			int y = uv.y * 4.0f;
 
 			int sum = (x + y) % 2;
 			if (sum == 0) 
@@ -319,6 +446,17 @@ int main(int argc, char* argv[])
 			
 		}, current_exec);
 	
+		/*
+	Texture mid_intensity_tex;
+	mid_intensity_tex.init(xm::ivec2(40, 40), nullptr, FilteringType::NEAREST);
+	mid_intensity_tex.fillPattern([](xm::vec2 uv) 
+		{
+		return g_mid_intensity_symbol;
+		}, 
+		current_exec);
+
+	*/
+
 	Texture current_texture = checkerboard_tex;
 
 	struct _vertex_output

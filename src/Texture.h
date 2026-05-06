@@ -7,6 +7,7 @@
 
 #include "DataInfo.h"
 #include "IntensityUtils.h"
+#include "BroadcastExecutor.h"
 
 enum class FilteringType : uint8_t
 {
@@ -55,8 +56,11 @@ public:
     {
         m_size = size;
         m_texture_buffer.resize(m_size.x * m_size.y);
-        std::transform(data, data + m_texture_buffer.size(), m_texture_buffer.data(), getIntensitySymbolUC);
-        /*
+        m_filtering_type = filtering_type;
+        if (data) 
+        {
+            std::transform(data, data + m_texture_buffer.size(), m_texture_buffer.data(), getIntensitySymbolUC);
+        }/*
         if(filtering_type == FilteringType::TRILINEAR)
         {
             int gen_levels = std::min(std::log2(m_size.x), std::log2(m_size.y)) - 1;
@@ -92,11 +96,11 @@ public:
                 int c00 = getSymbolIntensity(getValue(i));
                 int c10 = getSymbolIntensity(getValue(i + xm::ivec2{ 1,0 }));
                 int c01 = getSymbolIntensity(getValue(i + xm::ivec2{ 0,1 }));
-                int c11 = getSymbolIntensity(getValue(i + xm::ivec2{ 1,1 }));
-
+                int c11 = getSymbolIntensity(getValue(i + xm::ivec2{ 1,0 }));
+             
                 float ty = yf - i.y;
                 float tx = xf - i.x;
-
+             
                 float a = c00 + (c10 - c00) * tx;
                 float b = c01 + (c11 - c01) * tx;
                 uint final = (a + (b - a) * ty) + 0.5f;
@@ -129,6 +133,35 @@ public:
     {
         size_t y = m_size.y - 1 - pos.y;
         return y * m_size.x + pos.x;
+    }
+
+    template<typename UVPred>
+    void fillPattern(const UVPred& pred, BroadcastExecutor& exec)
+    {
+        exec.foreachSync(
+            [
+                pred, size = m_size
+            ]
+            (char& elem, uint idx)
+            {
+                xm::vec2 uv;
+                uv.u = (idx % size.x) / static_cast<float>(size.x);
+                uv.v = (idx / size.x) / static_cast<float>(size.y);
+                elem = pred(uv);
+            }, std::span(m_texture_buffer));
+    }
+
+    template<typename UVPred>
+    void fillSymbol(char symbol, BroadcastExecutor& exec)
+    {
+        exec.foreachSync(
+            [
+                symbol
+            ]
+            (char& elem, uint idx)
+            {
+                elem = symbol;
+            }, std::span(m_texture_buffer));
     }
 
     void clear(char clear_value)

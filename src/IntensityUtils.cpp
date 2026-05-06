@@ -7,8 +7,9 @@
 constexpr char g_intensity_symbols[] = " .'`^\",:;Il!i><~+?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
 constexpr uint g_intensity_symbols_size = sizeof(g_intensity_symbols) - 1;
 
-char g_clear_symbol = g_intensity_symbols[0];
+char g_min_intensity_symbol = g_intensity_symbols[0];
 char g_max_intensity_symbol = g_intensity_symbols[g_intensity_symbols_size - 1];
+char g_mid_intensity_symbol = g_intensity_symbols[g_intensity_symbols_size / 2];
 
 char getIntensitySymbolF(float intensity)
 {
