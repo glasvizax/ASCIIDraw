@@ -22,6 +22,8 @@
 #include "Camera.h"
 #include "ConsoleWindow.h"
 
+#include "Model.h"
+
 using uint = unsigned int;
 
 void processInput();
@@ -35,7 +37,7 @@ void inputThread();
 wchar_t getLastInputWChar();
 std::queue<wchar_t> g_input_queue;
 std::mutex g_input_mutex;
-
+/*
 struct Vertex
 {
 	xm::vec3 pos;
@@ -98,9 +100,10 @@ int g_cube_indices[] = {
 
 constexpr int g_cube_vertices_size = sizeof(g_cube_vertices) / sizeof(Vertex);
 constexpr int g_cube_indices_size = sizeof(g_cube_indices) / sizeof(int);
+*/
 
-xm::vec3 g_cube_scale{ 2.0f, 2.0f, 2.0f };
-xm::vec3 g_cube_pos{ 1.0f, 0.0f, -8.0f };
+xm::vec3 g_scale{ 0.2f, 0.2f, 0.2f };
+xm::vec3 g_pos{ 1.0f, -10.0f, -10.0f };
 
 Camera g_camera;
 
@@ -204,8 +207,6 @@ void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, U
 				internal_output[idx].skip = true;
 				return;
 			}
-
-			xm::vec2 uv = g_cube_vertices[idx].uv;
 
 			internal_output[idx].ndc = ndc;
 			internal_output[idx].w_recip = 1.0f / w;
@@ -358,7 +359,8 @@ void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, U
 							char current_symbol;
 							
 							float min = std::min({ alpha, beta, gamma });
-							if (min < 0.01f)
+							//if (min < 0.1f)
+							if(false)
 							{
 								int covered = 0;
 								float intensity = 0.0f;
@@ -457,8 +459,19 @@ int main(int argc, char* argv[])
 
 	*/
 
-	Texture current_texture = checkerboard_tex;
+	
 
+	Model osaka = loadModel("osaka.obj");
+	Mesh& osaka_mesh = osaka.m_entries.front().mesh;
+	Texture* osaka_tex = osaka.m_entries.front().texture;
+
+	osaka_tex->setFilteringType(FilteringType::BILINEAR);
+	Texture& current_texture = *osaka_tex;
+	Mesh& current_mesh = osaka_mesh;
+	
+	//Texture& current_texture = checkerboard_tex;
+	//Mesh& current_mesh = g_cube_mesh;
+	
 	struct _vertex_output
 	{
 		xm::vec2 uv;
@@ -506,8 +519,8 @@ int main(int argc, char* argv[])
 		g_camera.update(delta);
 
 		xm::mat4 model(1.0f);
-		model = xm::scale(model, g_cube_scale);
-		model = xm::translate(model, g_cube_pos);
+		model = xm::scale(model, g_scale);
+		model = xm::translate(model, g_pos);
 
 		xm::mat4 persp = g_camera.getPerspectiveMatrix();
 		xm::mat4 view = g_camera.getViewMatrix();
@@ -515,7 +528,7 @@ int main(int argc, char* argv[])
 		_vertex_input vs_in{ model, view, persp };
 		_fragment_input fs_in{ current_texture };
 
-		executeRenderingPipeline(shader_program, std::span(g_cube_vertices), std::span(g_cube_indices), vs_in, fs_in, current_exec, g_main_window);
+		executeRenderingPipeline(shader_program, std::span(current_mesh.m_vertices), std::span(current_mesh.m_indices), vs_in, fs_in, current_exec, g_main_window);
 
 		g_main_window.draw();
 	}

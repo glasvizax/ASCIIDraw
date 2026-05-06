@@ -30,11 +30,6 @@ class Mesh
 public:
 	std::vector<Vertex> m_vertices;
 	std::vector<uint> m_indices;
-	Mesh(const std::vector<Vertex>& vertices, const std::vector<uint>& indices) :
-		m_vertices(vertices),
-		m_indices(indices)
-	{
-	}
 };
 
 struct ModelEntry
@@ -49,17 +44,20 @@ public:
 	std::vector<ModelEntry> m_entries;
 };
 
-void loadModel(std::string_view filename)
+void processNode(Model& model, const aiScene* scene, const aiNode* const node);
+
+Model loadModel(std::string_view filename)
 {
 	std::string path = g_data_path + std::string(filename);
 	Model current_model;
 	Assimp::Importer in = Assimp::Importer();
-	auto* scene = in.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs);
+	auto* scene = in.ReadFile(path, aiProcess_Triangulate); //| aiProcess_FlipUVs);
 	if (!scene || !scene->mRootNode)
 	{
 		assert(false && "couldn't load scene");
 	}
 	processNode(current_model, scene, scene->mRootNode);
+	return current_model;
 }
 
 void processNode(Model& model, const aiScene* scene, const aiNode* const node)
@@ -163,7 +161,6 @@ Mesh g_cube_mesh({
 	}
 );
 
-
 /*
 struct Transform
 {
@@ -230,7 +227,6 @@ public:
 			//TODO : rotation 
 			new_local = xm::translate(new_local, m_transform.translation);
 			m_transform.local = new_local;
-
 		}
 	}
 };

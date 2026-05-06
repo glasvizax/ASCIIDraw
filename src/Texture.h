@@ -164,6 +164,11 @@ public:
             }, std::span(m_texture_buffer));
     }
 
+    void setFilteringType(FilteringType type) 
+    {
+        m_filtering_type = type;
+    }
+
     void clear(char clear_value)
     {
         std::memset(m_texture_buffer.data(), clear_value, m_texture_buffer.size());

@@ -110,7 +110,7 @@ public:
 	xm::mat4 m_view;
 
 	float m_near_plane = 1.0f;
-	float m_far_plane = 25.0f;
+	float m_far_plane = 100.0f;
 	float m_fov_deg = 40.0f;
 	float m_aspect_ratio = DEFAULT_ASPECT_RATIO;
 
