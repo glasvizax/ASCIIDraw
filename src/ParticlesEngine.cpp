@@ -245,7 +245,8 @@ void ParticlesEngine::workerThread(BroadcastExecutor& executor)
 
 		if (per_thread > 0)
 		{
-			executor.pushSync([
+			executor.pushSync(
+			[
 				_front_buffer = m_particles[front_buffer_idx],
 				_bursts_buffer = m_bursts_buffer,
 				_per_thread = per_thread,

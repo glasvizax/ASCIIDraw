@@ -14,9 +14,6 @@
 
 using uint = unsigned int;
 
-class SceneObject;
-class Scene;
-
 std::unordered_map<std::string, Texture> g_textures;
 
 struct Vertex
@@ -25,9 +22,8 @@ struct Vertex
 	xm::vec2 uv;
 };
 
-class Mesh
+struct Mesh
 {
-public:
 	std::vector<Vertex> m_vertices;
 	std::vector<uint> m_indices;
 };
@@ -51,7 +47,7 @@ Model loadModel(std::string_view filename)
 	std::string path = g_data_path + std::string(filename);
 	Model current_model;
 	Assimp::Importer in = Assimp::Importer();
-	auto* scene = in.ReadFile(path, aiProcess_Triangulate); //| aiProcess_FlipUVs);
+	auto* scene = in.ReadFile(path, aiProcess_Triangulate);
 	if (!scene || !scene->mRootNode)
 	{
 		assert(false && "couldn't load scene");
@@ -161,99 +157,4 @@ Mesh g_cube_mesh({
 	}
 );
 
-/*
-struct Transform
-{
-	//xm::vec3 m_rotation; TODO: eulers and quaternions
-	xm::vec3 translation;
-	xm::vec3 scale;
-
-	xm::mat4 local;
-	xm::mat4 world;
-
-	bool local_dirty = true;
-	bool world_dirty = true;
-};
-
-class SceneObject
-{
-	friend Scene;
-	std::vector<SceneObject*> m_children;
-	SceneObject* m_parent;
-
-	Transform m_transform;
-	Model m_model;
-
-public:
-
-	xm::vec3 getScale() const
-	{
-		return m_transform.scale;
-	}
-
-	xm::vec3 getTranslation() const
-	{
-		return m_transform.translation;
-	}
-
-	void setScale(xm::vec3 new_scale) 
-	{
-		m_transform.scale = new_scale;
-		m_transform.local_dirty = true;
-	}
-
-	void setTranslation(xm::vec3 new_translation)
-	{
-		m_transform.translation = new_translation;
-		m_transform.local_dirty = true;
-	}
-
-	void setParent(SceneObject* parent)
-	{
-		m_parent = parent;
-	}
-
-	void addChild(SceneObject* scene_object)
-	{
-		m_children.emplace_back(scene_object);
-	}
-
-	void update(float dt)
-	{
-		if(m_transform.local_dirty)
-		{
-			xm::mat4 new_local(1.0f);
-			new_local = xm::scale(new_local, m_transform.scale);
-			//TODO : rotation 
-			new_local = xm::translate(new_local, m_transform.translation);
-			m_transform.local = new_local;
-		}
-	}
-};
-
-class Scene
-{
-	std::vector<SceneObject*> m_children;
-
-public:
-
-	void addChild(SceneObject* child)
-	{
-		m_children.emplace_back(child)->m_parent = nullptr;
-	}
-
-	void update(float dt) 
-	{
-		for(auto o : m_children)
-		{
-			o->update(dt);
-		}
-	}
-
-	static void addSubChild(SceneObject* parent, SceneObject* child)
-	{
-		parent->m_children.emplace_back(child);
-		child->m_parent = child;
-	}
-};
-*/
+//TODO : transforms and scene graph

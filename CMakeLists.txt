@@ -18,7 +18,7 @@ set_policy(CMP0091 NEW)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-project(ASCIIDraw VERSION 0.1.1 LANGUAGES CXX)
+project(ASCIIDraw VERSION 1.0.0 LANGUAGES CXX)
 
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "external_libs" OUTPUT_VARIABLE EXTERNAL_LIBS_DIR)
 cmake_path(SET FETCHCONTENT_BASE_DIR ${EXTERNAL_LIBS_DIR})
@@ -53,6 +53,12 @@ fetch_stb(
     HEADERS 
         stb_image 
         stb_image_write
+)
+
+target_compile_definitions(
+    stb
+    PUBLIC 
+        STBI_WINDOWS_UTF8
 )
 
 # TODO: fix
@@ -140,11 +146,16 @@ install(
     CONFIGURATIONS Release
 )
 
+# install(IMPORTED_RUNTIME_ARTIFACTS assimp::assimp)
+
 set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
 set(CPACK_PACKAGE_VENDOR "glasvizax")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_NAME} - console software renderer")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
 set(CPACK_VERBATIM_VARIABLES ON)
-set(CPACK_GENERATOR NSIS)
+set(CPACK_GENERATOR NSIS;ZIP)
 
 include(CPack)
+
+# TODO : add precompile headers, batching, logging, remove file(GLOB ...), 
+#        add more compatibility with single config generators, add unix cpack generator support

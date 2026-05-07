@@ -8,60 +8,14 @@
 
 #include "Platform.h"
 
-static xm::ivec2 s_window_size;
-
-void pushWindowSize(xm::ivec2 size)
+inline xm::uvec2 NDCtoPixelu(xm::vec2 pos, xm::ivec2 window_size)
 {
-    s_window_size = size;
+    return xm::uvec2(window_size.x * (pos.x + 1.0f) / 2.0f, window_size.y * (pos.y + 1.0f) / 2.0f);
 }
 
-inline xm::uvec2 NDCtoPixelu(xm::vec2 pos)
+inline xm::ivec2 NDCtoPixeli(xm::vec2 pos, xm::ivec2 window_size)
 {
-    return xm::uvec2(s_window_size.x * (pos.x + 1.0f) / 2.0f, s_window_size.y * (pos.y + 1.0f) / 2.0f);
-}
-
-inline xm::ivec2 NDCtoPixeli(xm::vec2 pos)
-{
-    return xm::ivec2(s_window_size.x * (pos.x + 1.0f) / 2.0f, s_window_size.y * (pos.y + 1.0f) / 2.0f);
-}
-
-template <typename FragmentShader>
-void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, FragmentShader fragment_shader)
-{
-    pushTriangleBarycenterRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c), fragment_shader);
-}
-
-template <typename FragmentShader>
-void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, BroadcastExecutor& exec, FragmentShader fragment_shader)
-{
-    pushTriangleBarycenterRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c), exec, fragment_shader);
-}
-
-void pushLine(char symbol, xm::vec2 a, xm::vec2 b)
-{
-    pushLineRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b));
-}
-
-template <typename FragmentShader>
-void pushLine(char symbol, xm::vec2 a, xm::vec2 b, FragmentShader fragment_shader)
-{
-    pushLineRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), fragment_shader);
-}
-
-void pushPixel(char symbol, xm::vec2 pos)
-{
-    xm::ivec2 pixel = NDCtoPixeli(pos);
-    platform::drawPixel(pixel.x, pixel.y, symbol);
-}
-
-void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c)
-{
-    pushTriangleScanlineRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c));
-}
-
-void pushTriangle(char symbol, xm::vec2 a, xm::vec2 b, xm::vec2 c, BroadcastExecutor& exec)
-{
-    pushTriangleBarycenterRaw(symbol, NDCtoPixeli(a), NDCtoPixeli(b), NDCtoPixeli(c), exec);
+    return xm::ivec2(window_size.x * (pos.x + 1.0f) / 2.0f, window_size.y * (pos.y + 1.0f) / 2.0f);
 }
 
 xm::vec3 naiveWorldTransoform(xm::vec3 vec, xm::vec3 pos)

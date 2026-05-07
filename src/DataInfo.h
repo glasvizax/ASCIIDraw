@@ -4,6 +4,6 @@
 
 #ifndef DATA_PATH
 #define DATA_PATH "data"
-#endif 
+#endif
 
 const std::string g_data_path(DATA_PATH "\\");

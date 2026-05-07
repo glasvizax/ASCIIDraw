@@ -1,8 +1,10 @@
 #include "ConsoleWindow.h"
 
 #include <windows.h>
+
 #include <iostream>
 #include <cassert>
+
 #include "IntensityUtils.h"
 
 bool setConsoleSizeAndFont(HANDLE hOut, int width, int height)
@@ -76,7 +78,7 @@ bool setConsoleSizeAndFont(HANDLE hOut, int width, int height)
 	return true;
 }
 
-void ConsoleWindow::init()
+void ConsoleWindow::init(std::atomic<bool>& stop_flag)
 {
 	HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
 	if (hOut == INVALID_HANDLE_VALUE || hOut == nullptr)
@@ -95,6 +97,8 @@ void ConsoleWindow::init()
 	std::ios::sync_with_stdio(false);
 	m_main_framebuffer.init(m_size);
 	m_z_framebuffer.init(m_size);
+
+	m_input_thread = std::thread(&ConsoleWindow::inputThread, this, std::ref(stop_flag));
 }
 
 void ConsoleWindow::draw()
@@ -108,4 +112,36 @@ void ConsoleWindow::clear()
 {
 	m_main_framebuffer.clear(m_clear_symbol);
 	m_z_framebuffer.clear(1.0f);
+}
+
+void ConsoleWindow::destroy() 
+{
+	if(m_input_thread.joinable())
+	{
+		m_input_thread.join();
+	}
+}
+
+void ConsoleWindow::inputThread(std::atomic<bool>& stop_flag)
+{
+	while (!stop_flag.load())
+	{
+		wchar_t c = _getwch();
+		std::scoped_lock lock(m_input_mtx);
+		m_input_queue.push(c);
+	}
+}
+
+wchar_t ConsoleWindow::getLastInputKeyWChar()
+{
+	wchar_t key = L'\0';
+	{
+		std::lock_guard<std::mutex> lock(m_input_mtx);
+		if (!m_input_queue.empty())
+		{
+			key = m_input_queue.front();
+			m_input_queue.pop();
+		}
+	}
+	return key;
 }
