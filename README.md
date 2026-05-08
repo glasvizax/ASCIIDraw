@@ -26,7 +26,7 @@ cmake --build build --config Release
 ```
 ## Download & Play
 Don't want to build from source? Download the ready-to-use Windows installer:
-👉 **[Download ASCIIDraw NSIS Installer (v1.0.0)](link)**
+👉 **[Download ASCIIDraw NSIS Installer (v1.0.0)](https://github.com/glasvizax/ASCIIDraw/releases/tag/v1.0)**
 
 *Note: Since the installer is not digitally signed, Windows Defender SmartScreen might show a warning. Click "More info" -> "Run anyway".*
 
