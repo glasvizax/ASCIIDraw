@@ -78,11 +78,10 @@ template<
 	typename UserVertexShaderInput,
 	typename UserFragmentShaderInput,
 	typename VertexType,
-	std::integral I,
 	std::size_t Extent1,
 	std::size_t Extent2
 >
-void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, UserVertexShaderOutput, UserFragmentShaderInput>& shader_program, std::span<VertexType, Extent1> vertices, std::span<I, Extent2> indices, UserVertexShaderInput& vertex_input, UserFragmentShaderInput& fragment_input, BroadcastExecutor& exec, ConsoleWindow& main_window, bool backface_culling = true)
+void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, UserVertexShaderOutput, UserFragmentShaderInput>& shader_program, std::span<VertexType, Extent1> vertices, std::span<xm::uvec3, Extent2> indices, UserVertexShaderInput& vertex_input, UserFragmentShaderInput& fragment_input, BroadcastExecutor& exec, ConsoleWindow& main_window, bool backface_culling = true)
 {
 	static_assert(sizeof(UserVertexShaderOutput) % sizeof(float) == 0 && "UserVertexShaderOutput must contain only float-point data");
 	static std::vector<InternalVertexShaderOutput<UserVertexShaderOutput>> internal_output(512 < vertices.size() ? vertices.size() : 512);
@@ -129,31 +128,34 @@ void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, U
 	);
 
 	// fragment shading
-	for (int i = 0; i < indices.size(); i += 3)
+	for (int i = 0; i < indices.size(); i +=1)
 	{
-		bool skip = internal_output[indices[i]].skip ||
-			internal_output[indices[i + 1]].skip ||
-			internal_output[indices[i + 2]].skip;
+		xm::uvec3 idx = indices[i];
+		auto data0 = internal_output[idx.x];
+		auto data1 = internal_output[idx.y];
+		auto data2 = internal_output[idx.z];
+
+		bool skip = data0.skip || data1.skip || data2.skip;
 		if (skip)
 		{
 			continue;
 		}
 
-		xm::vec3 ndc0 = internal_output[indices[i]].ndc;
-		xm::vec3 ndc1 = internal_output[indices[i + 1]].ndc;
-		xm::vec3 ndc2 = internal_output[indices[i + 2]].ndc;
+		xm::vec3 ndc0 = data0.ndc;
+		xm::vec3 ndc1 = data1.ndc;
+		xm::vec3 ndc2 = data2.ndc;
 
 		xm::ivec2 a = NDCtoPixeli(xm::vec2(ndc0), main_window.m_size);
 		xm::ivec2 b = NDCtoPixeli(xm::vec2(ndc1), main_window.m_size);
 		xm::ivec2 c = NDCtoPixeli(xm::vec2(ndc2), main_window.m_size);
 
-		float w0_recip = internal_output[indices[i]].w_recip;
-		float w1_recip = internal_output[indices[i + 1]].w_recip;
-		float w2_recip = internal_output[indices[i + 2]].w_recip;
+		float w0_recip = data0.w_recip;
+		float w1_recip = data1.w_recip;
+		float w2_recip = data2.w_recip;
 
-		UserVertexShaderOutput& uo0 = internal_output[indices[i]].user_output;
-		UserVertexShaderOutput& uo1 = internal_output[indices[i + 1]].user_output;
-		UserVertexShaderOutput& uo2 = internal_output[indices[i + 2]].user_output;
+		UserVertexShaderOutput& uo0 = data0.user_output;
+		UserVertexShaderOutput& uo1 = data1.user_output;
+		UserVertexShaderOutput& uo2 = data2.user_output;
 
 		xm::ivec2 bbmin, bbmax;
 		bbmin.x = std::min(std::min(a.x, b.x), c.x);

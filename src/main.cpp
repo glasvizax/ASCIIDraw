@@ -34,6 +34,48 @@ std::atomic<bool> g_stop{ false };
 Camera g_camera;
 ConsoleWindow g_main_window;
 
+Mesh generateLandscape(float width, float height, uint precision_width, uint precision_height, float (y_func)(float, float))
+{
+	Mesh res;
+	res.m_vertices.reserve((precision_width + 1) * (precision_height + 1));
+	res.m_indices.reserve((precision_width * 2) * precision_height);
+
+	const uint stride = precision_width + 1;
+	for (uint j = 0; j < precision_height; ++j)
+	{
+		for (uint i = 0; i < precision_width; ++i)
+		{
+			uint a = j * stride + i;
+			uint b = a + 1;
+			uint c = a + stride;
+			uint d = c + 1;
+			res.m_indices.emplace_back(xm::uvec3{ a, b, c });
+			res.m_indices.emplace_back(xm::uvec3{ b, d, c });
+		}
+	}
+
+	float start_x = -width / 2;
+	float start_z = height / 2;
+	float x_step = width / precision_width;
+	float z_step = -height / precision_height;
+	for (uint j = 0; j < precision_height + 1; ++j)
+	{
+		for (uint i = 0; i < precision_width + 1; ++i)
+		{
+			float x = start_x + i * x_step;
+			float z = start_z + j * z_step;
+			float y = y_func(x, z);
+			float u = i / static_cast<float>(precision_width);
+			float v = j / static_cast<float>(precision_height);
+			xm::vec3 a_pos(x, y, z);
+			xm::vec2 a_uv(u, v);
+			res.m_vertices.emplace_back(Vertex(a_pos, a_uv));
+		}
+	}
+
+	return res;
+}
+
 int main(int argc, char* argv[])
 {
 	auto last_time = std::chrono::steady_clock::now();
@@ -114,6 +156,9 @@ int main(int argc, char* argv[])
 		Texture& texture;
 	};
 
+
+	Mesh landscape = generateLandscape(50.0f, 50.0f, 15, 15, [](float x, float z) {return 1.5f * sinf(x * 0.5f) * 1.5f * cosf(z * 0.5f); });
+
 	ShaderProgram<Vertex, _vertex_input, _vertex_output, _fragment_input> shader_program(
 		//vertex shader
 		[](xm::vec4& position, Vertex& vertex, _vertex_input& vs_in, _vertex_output& vs_out) -> void
@@ -152,15 +197,16 @@ int main(int argc, char* argv[])
 
 		processInput();
 		g_camera.update(delta);
+		xm::mat4 persp = g_camera.getPerspectiveMatrix();
+		xm::mat4 view = g_camera.getViewMatrix();
 
+		/*
 		xm::mat4 girl_model(1.0f);
 		girl_model = xm::scale(girl_model, girl_scale);
 		girl_model = xm::rotate(girl_model, xm::vec3(0.0f, 1.0f, 0.0f), girl_rot_yaw_rad);
 		girl_model = xm::translate(girl_model, girl_pos);
 		
-		xm::mat4 persp = g_camera.getPerspectiveMatrix();
-		xm::mat4 view = g_camera.getViewMatrix();
-
+		
 		_vertex_input vs_in1{ girl_model, view, persp };
 		
 		for(auto& e : girl.m_entries)
@@ -177,6 +223,23 @@ int main(int argc, char* argv[])
 		_fragment_input fs_in2{ *cube.m_entries.back().texture };
 		
 		executeRenderingPipeline(shader_program, std::span(cube.m_entries.back().mesh.m_vertices), std::span(cube.m_entries.back().mesh.m_indices), vs_in2, fs_in2, current_exec, g_main_window, false);
+		*/
+
+
+		xm::mat4 landscape_model(1.0f);
+		_vertex_input vs_in3{ landscape_model, view, persp };
+		_fragment_input fs_in3{ checkerboard_tex };
+
+		executeRenderingPipeline(
+			shader_program, 
+			std::span(landscape.m_vertices), 
+			std::span(landscape.m_indices), 
+			vs_in3, 
+			fs_in3, 
+			current_exec, 
+			g_main_window
+		);
+
 
 		g_main_window.draw();
 	}

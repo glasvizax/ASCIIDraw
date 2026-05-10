@@ -18,15 +18,29 @@ set_policy(CMP0091 NEW)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-project(ASCIIDraw VERSION 1.0.0 LANGUAGES CXX)
-
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "external_libs" OUTPUT_VARIABLE EXTERNAL_LIBS_DIR)
 cmake_path(SET FETCHCONTENT_BASE_DIR ${EXTERNAL_LIBS_DIR})
 
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "data" OUTPUT_VARIABLE DATA_DIR)
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "src" OUTPUT_VARIABLE SRC_DIR)
 
-find_package(assimp REQUIRED)
+if(EXISTS assimp)
+    set(ASSIMP_DIR assimp)
+elseif(EXISTS "$ENV{ASSIMP_DIR}")
+    set(ASSIMP_DIR "$ENV{ASSIMP_DIR}")    
+else()
+    message(FATAL_ERROR "couldn't find assimp'")
+endif() 
+
+cmake_path(APPEND ASSIMP_DIR "build" OUTPUT_VARIABLE ASSIMP_BUILD_DIR)
+
+project(ASCIIDraw VERSION 1.0.0 LANGUAGES CXX)
+
+block()
+    set(CMAKE_FOLDER "ExternalLibs/Assimp")
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${ASSIMP_DIR} ${ASSIMP_BUILD_DIR} SYSTEM)
+endblock()
 
 FetchContent_Declare(
     XPERCMakeUtils
@@ -46,19 +60,20 @@ FetchContent_MakeAvailable(
     XPERMath
 )
 
-include(fetch_stb)
+include(fetch_stb NO_POLICY_SCOPE)
 
 fetch_stb(
     DOWNLOAD_PATH ${EXTERNAL_LIBS_DIR}
     HEADERS 
-        stb_image 
-        stb_image_write
+        stb_image.h
+        stb_image_write.h
 )
 
 target_compile_definitions(
     stb
     PUBLIC 
         STBI_WINDOWS_UTF8
+
 )
 
 # TODO: fix
