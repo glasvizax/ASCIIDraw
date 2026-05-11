@@ -10,6 +10,7 @@
 
 #include <queue>
 #include <span>
+#include <optional>
 
 #include "Platform.h"
 #include "ParticlesEngine.h"
@@ -26,13 +27,20 @@
 
 using uint = unsigned int;
 
-void processInput();
-void pushPixelRaw(char symbol, xm::ivec2 pos);
+class Engine
+{
+public:
+	std::atomic<bool> m_stop{ false };
+	Camera m_camera;
+	ConsoleWindow m_main_window;
+	std::optional<BroadcastExecutor> m_executor;
 
-std::atomic<bool> g_stop{ false };
+	void init();
+	void processInput();
+	void pushPixelRaw(char symbol, xm::ivec2 pos);
+};
 
-Camera g_camera;
-ConsoleWindow g_main_window;
+Engine g_engine;
 
 Mesh generateLandscape(float width, float height, uint precision_width, uint precision_height, float (y_func)(float, float))
 {
@@ -80,18 +88,21 @@ int main(int argc, char* argv[])
 {
 	auto last_time = std::chrono::steady_clock::now();
 
-	int hardware = std::thread::hardware_concurrency();
-	int threads_for_broadcasts = hardware < 2 ? 2 : hardware;
-	int current_threads_for_broadcasts = threads_for_broadcasts;
-
-	BroadcastExecutor current_exec(current_threads_for_broadcasts, g_stop);
-
-	g_main_window.init(g_stop);
-	g_camera.setAspectRatio(g_main_window.m_aspect);
+	g_engine.init();
 
 	//Texture awesomeface_tex = loadTexture("awesomeface.png", FilteringType::BILINEAR);
 	//Texture weapon_tex = loadTexture("weapon.jpg");
-	
+		/*
+	Texture mid_intensity_tex;
+	mid_intensity_tex.init(xm::ivec2(40, 40), nullptr, FilteringType::NEAREST);
+	mid_intensity_tex.fillPattern([](xm::vec2 uv)
+		{
+		return g_mid_intensity_symbol;
+		},
+		current_exec);
+
+	*/
+
 	Texture checkerboard_tex;
 	checkerboard_tex.init(xm::ivec2(40, 40), nullptr, FilteringType::BILINEAR);
 	checkerboard_tex.fillPattern([](xm::vec2 uv)
@@ -109,25 +120,14 @@ int main(int argc, char* argv[])
 				return getIntensitySymbolF(1.0f);
 			}
 			
-		}, current_exec);
+		}, *g_engine.m_executor);
 	
-		/*
-	Texture mid_intensity_tex;
-	mid_intensity_tex.init(xm::ivec2(40, 40), nullptr, FilteringType::NEAREST);
-	mid_intensity_tex.fillPattern([](xm::vec2 uv) 
-		{
-		return g_mid_intensity_symbol;
-		}, 
-		current_exec);
-
-	*/
-
 	Model cube;
 	ModelEntry cube_entry;
 	cube_entry.mesh = g_cube_mesh;
 	cube_entry.texture = &checkerboard_tex;
 	cube.m_entries.emplace_back(cube_entry);
-
+	/*
 	Model girl = loadModel("osaka.obj");
 	Mesh& girl_mesh = girl.m_entries.front().mesh;
 	Texture* girl_tex = girl.m_entries.front().texture;
@@ -136,9 +136,9 @@ int main(int argc, char* argv[])
 	Texture& current_texture = *girl_tex;
 	Mesh& current_mesh = girl_mesh;
 	
-	//Texture& current_texture = checkerboard_tex;
-	//Mesh& current_mesh = g_cube_mesh;
-	
+	Texture& current_texture = checkerboard_tex;
+	Mesh& current_mesh = g_cube_mesh;
+	*/
 	struct _vertex_output
 	{
 		xm::vec2 uv;
@@ -185,9 +185,9 @@ int main(int argc, char* argv[])
 	xm::vec3 cube_scale{ 5.0f, 0.5f, 5.0f };
 	xm::vec3 cube_pos{ 1.0f, -11.0f, -21.0f };
 
-	while (!g_stop)
+	while (!g_engine.m_stop)
 	{
-		g_main_window.clear();
+		g_engine.m_main_window.clear();
 
 		auto time = std::chrono::steady_clock::now();
 		float delta = std::chrono::duration<float>(time - last_time).count();
@@ -195,10 +195,10 @@ int main(int argc, char* argv[])
 
 		girl_rot_yaw_rad += girl_rot_yaw_speed * delta;
 
-		processInput();
-		g_camera.update(delta);
-		xm::mat4 persp = g_camera.getPerspectiveMatrix();
-		xm::mat4 view = g_camera.getViewMatrix();
+		g_engine.processInput();
+		g_engine.m_camera.update(delta);
+		xm::mat4 persp = g_engine.m_camera.getPerspectiveMatrix();
+		xm::mat4 view = g_engine.m_camera.getViewMatrix();
 
 		/*
 		xm::mat4 girl_model(1.0f);
@@ -236,70 +236,69 @@ int main(int argc, char* argv[])
 			std::span(landscape.m_indices), 
 			vs_in3, 
 			fs_in3, 
-			current_exec, 
-			g_main_window
+			*g_engine.m_executor,
+			g_engine.m_main_window
 		);
 
 
-		g_main_window.draw();
+		g_engine.m_main_window.draw();
 	}
 }
 
-
-void pushPixelRaw(char symbol, xm::ivec2 pos)
+void Engine::pushPixelRaw(char symbol, xm::ivec2 pos)
 {
-	g_main_window.m_main_framebuffer.setValue(pos, symbol);
+	m_main_window.m_main_framebuffer.setValue(pos, symbol);
 }
 
-void processInput()
+void Engine::processInput()
 {
-	if (wchar_t last_char = g_main_window.getLastInputKeyWChar(); last_char != L'\0') 
+	if (wchar_t last_char = m_main_window.getLastInputKeyWChar(); last_char != L'\0') 
 	{
 		bool update_dir = false;
 		if (last_char == L'o' || last_char == L'щ')
 		{
-			g_stop.store(true);
+			m_stop.store(true);
 		}
 		else if (last_char == L'w' || last_char == L'ц')
 		{
-			g_camera.moveForward();
+			m_camera.moveForward();
 		}
 		else if (last_char == L's' || last_char == L'ы')
 		{
-			g_camera.moveBackward();
+			m_camera.moveBackward();
 		}
 
 		else if (last_char == L'd' || last_char == L'в')
 		{
-			g_camera.moveRight();
+			m_camera.moveRight();
 		}
 
 		else if (last_char == L'a' || last_char == L'ф')
 		{
-			g_camera.moveLeft();
+			m_camera.moveLeft();
 		}
 		else if (last_char == L'q' || last_char == L'й')
 		{
-			g_camera.turnLeft();
+			m_camera.turnLeft();
 		}
 		else if (last_char == L'e' || last_char == L'у')
 		{
-			g_camera.turnRight();
+			m_camera.turnRight();
 		}
 		else if (last_char == L'z' || last_char == L'я')
 		{
-			g_camera.lookDown();
+			m_camera.lookDown();
 		}
 		else if (last_char == L'x' || last_char == L'ч')
 		{
-			g_camera.lookUp();
+			m_camera.lookUp();
 		}
 	}
 }
 
 void platform::drawPixel(int x, int y, char symbol)
 {
-	pushPixelRaw(symbol, xm::ivec2(x, y));
+	g_engine.pushPixelRaw(symbol, xm::ivec2(x, y));
 }
 
 void platform::drawPixel(int x, int y, float r, float g, float b, float a)
@@ -308,5 +307,16 @@ void platform::drawPixel(int x, int y, float r, float g, float b, float a)
 	intensity *= a;
 
 	char symbol = getIntensitySymbolF(intensity);
-	pushPixelRaw(symbol, xm::ivec2(x, y));
+	g_engine.pushPixelRaw(symbol, xm::ivec2(x, y));
+}
+
+void Engine::init()
+{
+	m_main_window.init(m_stop);
+	m_camera.setAspectRatio(m_main_window.m_aspect);
+
+	int hardware = std::thread::hardware_concurrency();
+	int threads_for_broadcasts = hardware < 2 ? 2 : hardware;
+	int current_threads_for_broadcasts = threads_for_broadcasts;
+	m_executor.emplace(current_threads_for_broadcasts, g_engine.m_stop);
 }
