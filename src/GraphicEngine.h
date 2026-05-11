@@ -83,7 +83,7 @@ template<
 >
 void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, UserVertexShaderOutput, UserFragmentShaderInput>& shader_program, std::span<VertexType, Extent1> vertices, std::span<xm::uvec3, Extent2> indices, UserVertexShaderInput& vertex_input, UserFragmentShaderInput& fragment_input, BroadcastExecutor& exec, ConsoleWindow& main_window, bool backface_culling = true)
 {
-	static_assert(sizeof(UserVertexShaderOutput) % sizeof(float) == 0 && "UserVertexShaderOutput must contain only float-point data");
+	static_assert((sizeof(UserVertexShaderOutput) % sizeof(float) == 0 || sizeof(UserVertexShaderOutput) == 1) && "UserVertexShaderOutput must contain only float-point data");
 	static std::vector<InternalVertexShaderOutput<UserVertexShaderOutput>> internal_output(512 < vertices.size() ? vertices.size() : 512);
 
 	// vertex shading

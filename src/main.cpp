@@ -41,7 +41,7 @@ public:
 };
 
 Engine g_engine;
-
+/*
 Mesh generateLandscape(float width, float height, uint precision_width, uint precision_height, float (y_func)(float, float))
 {
 	Mesh res;
@@ -83,7 +83,7 @@ Mesh generateLandscape(float width, float height, uint precision_width, uint pre
 
 	return res;
 }
-
+*/
 int main(int argc, char* argv[])
 {
 	auto last_time = std::chrono::steady_clock::now();
@@ -127,6 +127,7 @@ int main(int argc, char* argv[])
 	cube_entry.mesh = g_cube_mesh;
 	cube_entry.texture = &checkerboard_tex;
 	cube.m_entries.emplace_back(cube_entry);
+
 	/*
 	Model girl = loadModel("osaka.obj");
 	Mesh& girl_mesh = girl.m_entries.front().mesh;
@@ -139,9 +140,16 @@ int main(int argc, char* argv[])
 	Texture& current_texture = checkerboard_tex;
 	Mesh& current_mesh = g_cube_mesh;
 	*/
-	struct _vertex_output
+	struct _object_vertex_output
 	{
 		xm::vec2 uv;
+		xm::vec3 normal;
+		xm::vec3 frag_world;
+	};
+
+	struct _light_vertex_output
+	{
+
 	};
 
 	struct _vertex_input
@@ -151,32 +159,76 @@ int main(int argc, char* argv[])
 		xm::mat4& perspective;
 	};
 
-	struct _fragment_input
+	struct _light_fragment_input
 	{
-		Texture& texture;
+		float light_intensity;
+	};
+	
+	struct _object_fragment_input
+	{
+		float object_intensity;
+		float light_intensity;
+		xm::vec3 light_pos;
+		xm::vec3 view_pos;
 	};
 
+	//Mesh landscape = generateLandscape(50.0f, 50.0f, 15, 15, [](float x, float z) {return 1.5f * sinf(x * 0.5f) * 1.5f * cosf(z * 0.5f); });
 
-	Mesh landscape = generateLandscape(50.0f, 50.0f, 15, 15, [](float x, float z) {return 1.5f * sinf(x * 0.5f) * 1.5f * cosf(z * 0.5f); });
-
-	ShaderProgram<Vertex, _vertex_input, _vertex_output, _fragment_input> shader_program(
+	ShaderProgram<Vertex, _vertex_input, _object_vertex_output, _object_fragment_input> object_shader_program(
 		//vertex shader
-		[](xm::vec4& position, Vertex& vertex, _vertex_input& vs_in, _vertex_output& vs_out) -> void
+		[](xm::vec4& position, Vertex& vertex, _vertex_input& vs_in, _object_vertex_output& vs_out) -> void
 		{
 			xm::vec3 vert = vertex.pos;
 			xm::vec4 world = vs_in.model * xm::vec4(vert, 1.0f);
 			xm::vec4 look = vs_in.view * world;
 			xm::vec4 clip = vs_in.perspective * look;
+
+			vs_out.frag_world = xm::vec3(world);
 			vs_out.uv = vertex.uv;
+			vs_out.normal = xm::vec3(vs_in.model * xm::vec4(vertex.normal, 0.0f));
+
 			position = clip;
 		},
 		//fragment shader
-		[](_vertex_output& vs_in, _fragment_input& fs_in) -> char
+		[](_object_vertex_output& vs_in, _object_fragment_input& fs_in) -> char
 		{
-			return fs_in.texture.getValueUV(vs_in.uv);
+			xm::vec3 normal = xm::normalize(vs_in.normal);
+			xm::vec3 to_light_dir = xm::normalize(fs_in.light_pos - vs_in.frag_world);
+			xm::vec3 view_dir = xm::normalize(fs_in.view_pos - vs_in.frag_world);
+			xm::vec3 light_reflect = xm::reflect(-to_light_dir, normal);
+
+			float ambient_strength = 0.2f;
+			float specular_strength = 0.7f;
+
+			float ambient = fs_in.light_intensity * ambient_strength;
+			float diffuse = fs_in.light_intensity * std::fmaxf(xm::dot(normal, to_light_dir), 0.0f);
+
+			float spec = std::pow(std::fmaxf(xm::dot(light_reflect, view_dir), 0.0f), 256);
+
+			float specular = fs_in.light_intensity * specular_strength * spec;
+
+			return getIntensitySymbolF((ambient + diffuse + specular) * fs_in.object_intensity);
 		}
 	);
 
+	ShaderProgram<Vertex, _vertex_input, _light_vertex_output, _light_fragment_input> light_shader_program(
+		//vertex shader
+		[](xm::vec4& position, Vertex& vertex, _vertex_input& vs_in, _light_vertex_output& vs_out) -> void
+		{
+			xm::vec3 vert = vertex.pos;
+			xm::vec4 world = vs_in.model * xm::vec4(vert, 1.0f);
+			xm::vec4 look = vs_in.view * world;
+			xm::vec4 clip = vs_in.perspective * look;
+			position = clip;
+		},
+		//fragment shader
+		[](_light_vertex_output& vs_in, _light_fragment_input& fs_in) -> char
+		{
+			return getIntensitySymbolF(fs_in.light_intensity);
+		}
+	);
+
+	/*
 	xm::vec3 girl_scale( 0.2f);
 	xm::vec3 girl_pos{ 1.0f, -10.0f, -20.0f };
 	float girl_rot_yaw_rad = 0.0f;
@@ -184,6 +236,22 @@ int main(int argc, char* argv[])
 
 	xm::vec3 cube_scale{ 5.0f, 0.5f, 5.0f };
 	xm::vec3 cube_pos{ 1.0f, -11.0f, -21.0f };
+	*/
+	
+	xm::vec3 object_scale{ 3.0f, 3.0f, 3.0f };
+	xm::vec3 object_pos{ 0.0f, 0.0f, -15.0f };
+
+	float object_roll = 0.0f;
+	float object_pitch = 0.0f;
+
+	float object_roll_speed = xm::PI / 6.0f;
+	float object_pitch_speed = xm::PI / 9.0f;
+
+	xm::mat4 light_model(1.0f);
+	xm::vec3 light_scale{ 1.0f, 1.0f, 1.0f };
+	xm::vec3 light_pos{ 10.0f, 0.0f, -12.0f };
+	light_model = xm::scale(light_model, light_scale);
+	light_model = xm::translate(light_model, light_pos);
 
 	while (!g_engine.m_stop)
 	{
@@ -193,19 +261,64 @@ int main(int argc, char* argv[])
 		float delta = std::chrono::duration<float>(time - last_time).count();
 		last_time = time;
 
-		girl_rot_yaw_rad += girl_rot_yaw_speed * delta;
+		object_roll += object_roll_speed * delta;
+		object_pitch += object_pitch_speed * delta;
 
 		g_engine.processInput();
 		g_engine.m_camera.update(delta);
 		xm::mat4 persp = g_engine.m_camera.getPerspectiveMatrix();
 		xm::mat4 view = g_engine.m_camera.getViewMatrix();
 
-		/*
+		float light_intensity = 1.0f;
+
+		xm::mat4 object_model(1.0f);
+		object_model = xm::scale(object_model, object_scale);
+		object_model = xm::rotate(object_model, xm::vec3(1.0f, 0.0f, 0.0f), object_pitch);
+		object_model = xm::rotate(object_model, xm::vec3(0.0f, 0.0f, 1.0f), object_roll);
+		object_model = xm::translate(object_model, object_pos);
+		
+
+
+		_vertex_input object_vs{ object_model, view, persp };
+		_object_fragment_input object_fs;
+		object_fs.light_intensity = light_intensity;
+		object_fs.object_intensity = 0.8f;
+		object_fs.light_pos = light_pos;
+		object_fs.view_pos = g_engine.m_camera.m_position;
+
+
+		_vertex_input light_vs{ light_model, view, persp };
+		_light_fragment_input light_fs;
+		light_fs.light_intensity = light_intensity;
+
+		executeRenderingPipeline(
+			object_shader_program,
+			std::span(cube_entry.mesh.m_vertices),
+			std::span(cube_entry.mesh.m_indices),
+			object_vs,
+			object_fs,
+			*g_engine.m_executor,
+			g_engine.m_main_window,
+			false
+		);
+
+		executeRenderingPipeline(
+			light_shader_program,
+			std::span(cube_entry.mesh.m_vertices),
+			std::span(cube_entry.mesh.m_indices),
+			light_vs,
+			light_fs,
+			*g_engine.m_executor,
+			g_engine.m_main_window,
+			false
+		);
+
+		/* 
+		girl_rot_yaw_rad += girl_rot_yaw_speed * delta;
 		xm::mat4 girl_model(1.0f);
 		girl_model = xm::scale(girl_model, girl_scale);
 		girl_model = xm::rotate(girl_model, xm::vec3(0.0f, 1.0f, 0.0f), girl_rot_yaw_rad);
 		girl_model = xm::translate(girl_model, girl_pos);
-		
 		
 		_vertex_input vs_in1{ girl_model, view, persp };
 		
@@ -223,9 +336,7 @@ int main(int argc, char* argv[])
 		_fragment_input fs_in2{ *cube.m_entries.back().texture };
 		
 		executeRenderingPipeline(shader_program, std::span(cube.m_entries.back().mesh.m_vertices), std::span(cube.m_entries.back().mesh.m_indices), vs_in2, fs_in2, current_exec, g_main_window, false);
-		*/
-
-
+		
 		xm::mat4 landscape_model(1.0f);
 		_vertex_input vs_in3{ landscape_model, view, persp };
 		_fragment_input fs_in3{ checkerboard_tex };
@@ -239,7 +350,7 @@ int main(int argc, char* argv[])
 			*g_engine.m_executor,
 			g_engine.m_main_window
 		);
-
+		*/
 
 		g_engine.m_main_window.draw();
 	}

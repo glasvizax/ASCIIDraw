@@ -4,7 +4,7 @@
 
 #include "IntensityUtils.h"
 
-constexpr char g_intensity_symbols[] = " .'`^\",:;Il!i><~+?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+constexpr char g_intensity_symbols[] = " .`'^,:;i1tLCGf80@";
 constexpr uint g_intensity_symbols_size = sizeof(g_intensity_symbols) - 1;
 
 char g_min_intensity_symbol = g_intensity_symbols[0];
