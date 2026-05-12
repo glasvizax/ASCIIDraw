@@ -9,7 +9,7 @@ ASCIIDraw is a CPU-only, from-scratch 3D graphics pipeline that renders fully te
 This project was built entirely without graphics APIs (like OpenGL, Vulkan, or DirectX) to gain a deep, under-the-hood understanding of how GPUs process geometry, rasterize triangles, and interpolate data.
 # Showcase
 ![Osaka rendering showcase](osaka_showcase.gif)
-
+![Landscape rendering showcase](landspace_showcase.gif)
 # Build Instructions
 ### Prerequisites:
 1. Assimp 
