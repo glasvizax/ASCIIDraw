@@ -18,18 +18,25 @@ set_policy(CMP0091 NEW)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "external_libs" OUTPUT_VARIABLE EXTERNAL_LIBS_DIR)
+cmake_path(
+    APPEND CMAKE_CURRENT_SOURCE_DIR "external_libs" 
+    OUTPUT_VARIABLE EXTERNAL_LIBS_DIR
+)
+
 cmake_path(SET FETCHCONTENT_BASE_DIR ${EXTERNAL_LIBS_DIR})
 
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "data" OUTPUT_VARIABLE DATA_DIR)
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "src" OUTPUT_VARIABLE SRC_DIR)
 
 if(EXISTS assimp)
-    set(ASSIMP_DIR assimp)
+    cmake_path(SET ASSIMP_DIR assimp)
 elseif(EXISTS "$ENV{ASSIMP_DIR}")
-    set(ASSIMP_DIR "$ENV{ASSIMP_DIR}")    
+    cmake_path(SET ASSIMP_DIR "$ENV{ASSIMP_DIR}")    
 else()
-    message(FATAL_ERROR "couldn't find assimp'")
+    message(FATAL_ERROR 
+        "couldn't find assimp, specify environment variable"
+        "ASSIMP_DIR to assimp root directory]="
+    )
 endif() 
 
 cmake_path(APPEND ASSIMP_DIR "build" OUTPUT_VARIABLE ASSIMP_BUILD_DIR)
@@ -73,7 +80,6 @@ target_compile_definitions(
     stb
     PUBLIC 
         STBI_WINDOWS_UTF8
-
 )
 
 # TODO: fix
@@ -165,7 +171,9 @@ install(
 
 set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
 set(CPACK_PACKAGE_VENDOR "glasvizax")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_NAME} - console software renderer")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY 
+    "${PROJECT_NAME} - console software renderer"
+)
 set(CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
 set(CPACK_VERBATIM_VARIABLES ON)
 set(CPACK_GENERATOR NSIS;ZIP)

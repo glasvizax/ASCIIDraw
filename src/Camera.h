@@ -6,7 +6,7 @@ constexpr float DEFAULT_CAMERA_PITCH = 0.0f;
 constexpr float DEFAULT_CAMERA_YAW = 180.0f;
 constexpr float DEFAULT_CAMERA_ROLL = 0.0f;
 
-constexpr float DEFAULT_ASPECT_RATIO = 13.0f / 9.0f;
+constexpr float DEFAULT_ASPECT_RATIO_CONSOLE = 5.6f / 9.0f;
 
 class Camera
 {
@@ -112,7 +112,7 @@ public:
 	float m_near_plane = 1.0f;
 	float m_far_plane = 100.0f;
 	float m_fov_deg = 40.0f;
-	float m_aspect_ratio = DEFAULT_ASPECT_RATIO;
+	float m_aspect_ratio = DEFAULT_ASPECT_RATIO_CONSOLE;
 
 	float m_move_speed = 5.0f;
 	float m_rotation_speed_yaw = 100.0f;

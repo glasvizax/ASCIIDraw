@@ -237,7 +237,7 @@ void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, U
 				gamma0
 
 			]
-			(unsigned int thread_idx, unsigned int thread_count)
+			(uint thread_idx, uint thread_count)
 		{
 			int curr_y, curr_x;
 			if (_horizontal)

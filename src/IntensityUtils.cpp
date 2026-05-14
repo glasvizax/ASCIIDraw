@@ -17,7 +17,7 @@ char getIntensitySymbolF(float intensity)
     return g_intensity_symbols[std::clamp(idx, 0u, g_intensity_symbols_size - 1)];
 }
 
-char getIntensitySymbolUC(unsigned char intensity)
+char getIntensitySymbolUC(uchar intensity)
 {
     uint idx = (intensity * (g_intensity_symbols_size - 1)) / 255.0f + 0.5f;
     return g_intensity_symbols[idx];

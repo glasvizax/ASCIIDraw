@@ -5,9 +5,9 @@
 #include <atomic>
 #include <algorithm>
 
-class BroadcastExecutor;
+#include "Aliases.h"
 
-using uint = unsigned int;
+class BroadcastExecutor;
 
 // internal particle interface
 struct Particle

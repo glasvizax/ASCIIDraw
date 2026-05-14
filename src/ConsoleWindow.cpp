@@ -1,9 +1,9 @@
 #include "ConsoleWindow.h"
 
-#include <windows.h>
-
 #include <iostream>
 #include <cassert>
+
+#include <windows.h>
 
 #include "IntensityUtils.h"
 

@@ -49,3 +49,27 @@ void nonLinearPerspectiveExample()
     pushPixel(getIntensitySymbolF(0.0f), xm::vec2(v1_ndc.x, plane_y));
     */
 }
+
+void badDrawBezierCurve
+(
+    xm::vec2 p1,
+    xm::vec2 p2,
+    xm::vec2 p3,
+    xm::vec2 p4,
+    float t_step = 0.01f)
+{
+    for (float t = 0.0f; t <= 1.0f; t += t_step)
+    {
+        xm::vec2 a = p1 + (p2 - p1) * t;
+        xm::vec2 b = p2 + (p3 - p2) * t;
+        xm::vec2 c = p3 + (p4 - p3) * t;
+
+        xm::vec2 d = a + (b - a) * t;
+        xm::vec2 e = b + (c - b) * t;
+
+        xm::vec2 p = d + (e - d) * t;
+
+        //drawPixelNDC(p, ...);
+    }
+}
+

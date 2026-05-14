@@ -5,12 +5,12 @@
 #include <iostream>
 #include <cstdlib>
 
-#include <xm/xm.h>
-#include <xm/math_helpers.h>
-
 #include <queue>
 #include <span>
 #include <optional>
+
+#include <xm/xm.h>
+#include <xm/math_helpers.h>
 
 #include "Platform.h"
 #include "ParticlesEngine.h"
@@ -21,11 +21,9 @@
 #include "IntensityUtils.h"
 #include "Camera.h"
 #include "ConsoleWindow.h"
-
 #include "Model.h"
 #include "GraphicEngine.h"
-
-using uint = unsigned int;
+#include "Aliases.h"
 
 class Engine
 {
@@ -38,59 +36,10 @@ public:
 	void init();
 	void processInput();
 	void pushPixelRaw(char symbol, xm::ivec2 pos);
+	void pushPixelNDC(char symbol, xm::vec2 pos);
 };
 
 Engine g_engine;
-
-Mesh generateLandscape(float width, float height, uint precision_width, uint precision_height, float (y_func)(float, float))
-{
-	Mesh res;
-	res.m_vertices.reserve((precision_width + 1) * (precision_height + 1));
-	res.m_indices.reserve((precision_width * 2) * precision_height);
-
-	const uint stride = precision_width + 1;
-	for (uint j = 0; j < precision_height; ++j)
-	{
-		for (uint i = 0; i < precision_width; ++i)
-		{
-			uint a = j * stride + i;
-			uint b = a + 1;
-			uint c = a + stride;
-			uint d = c + 1;
-			res.m_indices.emplace_back(xm::uvec3{ a, b, c });
-			res.m_indices.emplace_back(xm::uvec3{ b, d, c });
-		}
-	}
-
-	float start_x = -width / 2;
-	float start_z = height / 2;
-	float x_step = width / precision_width;
-	float z_step = -height / precision_height;
-
-	float dx = 0.01;
-	float dz = 0.01;
-	for (uint j = 0; j < precision_height + 1; ++j)
-	{
-		for (uint i = 0; i < precision_width + 1; ++i)
-		{
-			float x = start_x + i * x_step;
-			float z = start_z + j * z_step;
-			float y = y_func(x, z);
-
-			float ydx = y_func(x + dx, z);
-			float ydz = y_func(x, z + dz);
-			xm::vec3 normal = xm::normalize(xm::cross(xm::vec3(0.0f, ydz - y, dz), xm::vec3(dx, ydx - y, 0.0f)));
-			
-			float u = i / static_cast<float>(precision_width);
-			float v = j / static_cast<float>(precision_height);
-			xm::vec3 pos(x, y, z);
-			xm::vec2 uv(u, v);
-			res.m_vertices.emplace_back(Vertex(pos, normal, uv));
-		}
-	}
-
-	return res;
-}
 
 int main(int argc, char* argv[])
 {
@@ -179,8 +128,8 @@ int main(int argc, char* argv[])
 		xm::vec3 light_pos;
 		xm::vec3 view_pos;
 	};
-
-	Mesh landscape = generateLandscape(30.0f, 30.0f, 30, 30, [](float x, float z) {return 1.5f * sinf(x * 0.5f) * 1.5f * cosf(z * 0.5f); });
+	
+	//Mesh landscape = generateLandscape(30.0f, 30.0f, 30, 30, [](float x, float z) {return 1.5f * sinf(x * 0.5f) * 1.5f * cosf(z * 0.5f); });
 
 	ShaderProgram<Vertex, _vertex_input, _object_vertex_output, _object_fragment_input> object_shader_program(
 		//vertex shader
@@ -266,16 +215,23 @@ int main(int argc, char* argv[])
 		float delta = std::chrono::duration<float>(time - last_time).count();
 		last_time = time;
 
+		//g_engine.pushPixelNDC(g_max_intensity_symbol, xm::vec2(0.0f, 0.0f));
+
+
+		//g_engine.processInput();
+		//g_engine.m_camera.update(delta);
+		
+		//xm::mat4 persp = g_engine.m_camera.getPerspectiveMatrix();
+		//xm::mat4 view = g_engine.m_camera.getViewMatrix();
+
+		//float time_integral = std::chrono::duration<float>(last_time.time_since_epoch()).count();
+		
+		
+		/*
+		 
+		
 		object_roll += object_roll_speed * delta;
 		object_pitch += object_pitch_speed * delta;
-
-		g_engine.processInput();
-		g_engine.m_camera.update(delta);
-		xm::mat4 persp = g_engine.m_camera.getPerspectiveMatrix();
-		xm::mat4 view = g_engine.m_camera.getViewMatrix();
-
-		float time_integral = std::chrono::duration<float>(last_time.time_since_epoch()).count();
-
 		float light_intensity = 1.0f;
 
 		xm::vec3 light_pos = light_start;
@@ -321,13 +277,16 @@ int main(int argc, char* argv[])
 			*g_engine.m_executor,
 			g_engine.m_main_window
 		);
+		*/
+
+
 
 		/*
-		//xm::mat4 object_model(1.0f);
-		//object_model = xm::scale(object_model, object_scale);
-		//object_model = xm::rotate(object_model, xm::vec3(1.0f, 0.0f, 0.0f), object_pitch);
-		//object_model = xm::rotate(object_model, xm::vec3(0.0f, 0.0f, 1.0f), object_roll);
-		//object_model = xm::translate(object_model, object_pos);
+		xm::mat4 object_model(1.0f);
+		object_model = xm::scale(object_model, object_scale);
+		object_model = xm::rotate(object_model, xm::vec3(1.0f, 0.0f, 0.0f), object_pitch);
+		object_model = xm::rotate(object_model, xm::vec3(0.0f, 0.0f, 1.0f), object_roll);
+		object_model = xm::translate(object_model, object_pos);
 		
 		executeRenderingPipeline(
 			object_shader_program,
@@ -387,6 +346,12 @@ int main(int argc, char* argv[])
 void Engine::pushPixelRaw(char symbol, xm::ivec2 pos)
 {
 	m_main_window.m_main_framebuffer.setValue(pos, symbol);
+}
+
+void Engine::pushPixelNDC(char symbol, xm::vec2 pos)
+{
+	xm::ivec2 ipos = NDCtoPixeli(pos, m_main_window.m_size);
+	pushPixelRaw(symbol, ipos);
 }
 
 void Engine::processInput()

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <xm/xm.h>
+
 #include "BroadcastExecutor.h"
 
 void pushLineRaw(char symbol, xm::ivec2 a, xm::ivec2 b);

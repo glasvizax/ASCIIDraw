@@ -6,12 +6,14 @@
 #include <xm/math_helpers.h>
 #include <vector>
 
+#include "Aliases.h"
+
 template<typename T>
 class Framebuffer
 {
     std::conditional_t<std::is_same_v<T, char>, std::string, std::vector<T>> m_buffer;
     xm::ivec2 m_size;
-    uint32_t m_buff_size;
+    uint m_buff_size;
 
 public:
     void init(xm::ivec2 size)
@@ -46,7 +48,6 @@ public:
     {
         m_buffer[getIndex(pos)] = value;
     }
-
 
     void clear(T clear_value)
     {
