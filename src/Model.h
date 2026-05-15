@@ -29,11 +29,20 @@ struct Vertex
 	xm::vec2 uv;
 };
 
-struct Mesh
+struct SimpleVertex
 {
-	std::vector<Vertex> m_vertices;
+	xm::vec3 pos;
+};
+
+template<typename VertexType>
+struct Mesh_t
+{
+	std::vector<VertexType> m_vertices;
 	std::vector<xm::uvec3> m_indices;
 };
+
+using Mesh = Mesh_t<Vertex>;
+using SimpleMesh = Mesh_t<SimpleVertex>;
 
 struct ModelEntry
 {

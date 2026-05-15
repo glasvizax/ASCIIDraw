@@ -25,6 +25,8 @@
 #include "GraphicEngine.h"
 #include "Aliases.h"
 
+#include "Teapotdata.h"
+
 class Engine
 {
 public:
@@ -41,10 +43,10 @@ public:
 
 Engine g_engine;
 
+void teapotScene();
+
 int main(int argc, char* argv[])
 {
-	auto last_time = std::chrono::steady_clock::now();
-
 	g_engine.init();
 
 	//Texture awesomeface_tex = loadTexture("awesomeface.png", FilteringType::BILINEAR);
@@ -59,7 +61,8 @@ int main(int argc, char* argv[])
 		current_exec);
 
 	*/
-
+	
+	/*
 	Texture checkerboard_tex;
 	checkerboard_tex.init(xm::ivec2(40, 40), nullptr, FilteringType::BILINEAR);
 	checkerboard_tex.fillPattern([](xm::vec2 uv)
@@ -84,7 +87,7 @@ int main(int argc, char* argv[])
 	cube_entry.mesh = g_cube_mesh;
 	cube_entry.texture = &checkerboard_tex;
 	cube.m_entries.emplace_back(cube_entry);
-
+	*/
 	/*
 	Model girl = loadModel("osaka.obj");
 	Mesh& girl_mesh = girl.m_entries.front().mesh;
@@ -97,6 +100,7 @@ int main(int argc, char* argv[])
 	Texture& current_texture = checkerboard_tex;
 	Mesh& current_mesh = g_cube_mesh;
 	*/
+	/*
 	struct _object_vertex_output
 	{
 		xm::vec2 uv;
@@ -107,13 +111,6 @@ int main(int argc, char* argv[])
 	struct _light_vertex_output
 	{
 
-	};
-
-	struct _vertex_input
-	{
-		xm::mat4& model;
-		xm::mat4& view;
-		xm::mat4& perspective;
 	};
 
 	struct _light_fragment_input
@@ -127,10 +124,14 @@ int main(int argc, char* argv[])
 		float light_intensity;
 		xm::vec3 light_pos;
 		xm::vec3 view_pos;
-	};
+	};*/
 	
 	//Mesh landscape = generateLandscape(30.0f, 30.0f, 30, 30, [](float x, float z) {return 1.5f * sinf(x * 0.5f) * 1.5f * cosf(z * 0.5f); });
 
+	teapotScene();
+
+
+	/*
 	ShaderProgram<Vertex, _vertex_input, _object_vertex_output, _object_fragment_input> object_shader_program(
 		//vertex shader
 		[](xm::vec4& position, Vertex& vertex, _vertex_input& vs_in, _object_vertex_output& vs_out) -> void
@@ -167,6 +168,7 @@ int main(int argc, char* argv[])
 			return getIntensitySymbolF((ambient + diffuse + specular) * fs_in.object_intensity);
 		}
 	);
+	
 
 	ShaderProgram<Vertex, _vertex_input, _light_vertex_output, _light_fragment_input> light_shader_program(
 		//vertex shader
@@ -183,7 +185,7 @@ int main(int argc, char* argv[])
 		{
 			return getIntensitySymbolF(fs_in.light_intensity);
 		}
-	);
+	);*/
 
 	/*
 	xm::vec3 girl_scale( 0.2f);
@@ -195,6 +197,7 @@ int main(int argc, char* argv[])
 	xm::vec3 cube_pos{ 1.0f, -11.0f, -21.0f };
 	*/
 	
+	/*
 	xm::vec3 object_scale{ 3.0f, 3.0f, 3.0f };
 	xm::vec3 object_pos{ 0.0f, 0.0f, -15.0f };
 
@@ -206,29 +209,24 @@ int main(int argc, char* argv[])
 
 	xm::vec3 light_scale{ 0.5f, 0.5f, 0.5f };
 	xm::vec3 light_start{ 10.0f, 6.0f, -12.0f };
+	*/
 
+/*
 	while (!g_engine.m_stop)
 	{
 		g_engine.m_main_window.clear();
 
-		auto time = std::chrono::steady_clock::now();
-		float delta = std::chrono::duration<float>(time - last_time).count();
+		auto time = chrono::steady_clock::now();
+		float delta = chrono::duration<float>(time - last_time).count();
 		last_time = time;
 
-		//g_engine.pushPixelNDC(g_max_intensity_symbol, xm::vec2(0.0f, 0.0f));
-
-
-		//g_engine.processInput();
-		//g_engine.m_camera.update(delta);
+		g_engine.processInput();
+		g_engine.m_camera.update(delta);
 		
-		//xm::mat4 persp = g_engine.m_camera.getPerspectiveMatrix();
-		//xm::mat4 view = g_engine.m_camera.getViewMatrix();
+		xm::mat4 persp = g_engine.m_camera.getPerspectiveMatrix();
+		xm::mat4 view = g_engine.m_camera.getViewMatrix();
 
-		//float time_integral = std::chrono::duration<float>(last_time.time_since_epoch()).count();
 		
-		
-		/*
-		 
 		
 		object_roll += object_roll_speed * delta;
 		object_pitch += object_pitch_speed * delta;
@@ -338,6 +336,81 @@ int main(int argc, char* argv[])
 			g_engine.m_main_window
 		);
 		*/
+
+//		g_engine.m_main_window.draw();
+	//}
+}
+
+void teapotScene()
+{
+	auto last_time = chrono::steady_clock::now();
+
+	struct _vertex_input
+	{
+		xm::mat4& model;
+		xm::mat4& view;
+		xm::mat4& perspective;
+	};
+
+	SimpleMesh teapot = generateTeapotMesh(6);
+	struct Empty {};
+
+	ShaderProgram<SimpleVertex, _vertex_input, Empty, Empty> teapot_shader_program(
+		//vertex shader
+		[](
+			xm::vec4& position, 
+			SimpleVertex& vertex, 
+			const _vertex_input& vs_in, 
+			const Empty& vs_out) -> void
+		{
+			xm::vec3 vert = vertex.pos;
+			xm::vec4 world = vs_in.model * xm::vec4(vert, 1.0f);
+			xm::vec4 look = vs_in.view * world;
+			xm::vec4 clip = vs_in.perspective * look;
+			position = clip;
+		},
+		//fragment shader
+		[](
+			const Empty& vs_in, 
+			const Empty& fs_in) -> char
+		{
+			return g_max_intensity_symbol;
+		}
+	);
+
+	while (!g_engine.m_stop)
+	{
+		g_engine.m_main_window.clear();
+
+		auto time = chrono::steady_clock::now();
+		float delta = chrono::duration<float>(time - last_time).count();
+		last_time = time;
+
+		g_engine.processInput();
+		g_engine.m_camera.update(delta);
+
+		xm::mat4 persp = g_engine.m_camera.getPerspectiveMatrix();
+		xm::mat4 view = g_engine.m_camera.getViewMatrix();
+
+		float time_integral = chrono::duration<float>(last_time.time_since_epoch()).count();
+
+		xm::mat4 teapot_model(1.0f);
+		teapot_model = xm::scale(teapot_model, xm::vec3(2.0f));
+		teapot_model = xm::rotate(teapot_model, xm::vec3(1.0f, 0.0f, 0.0f), xm::PI / 2.0);
+		teapot_model = xm::translate(teapot_model, xm::vec3(10.0f, 6.0f, -12.0f));
+
+		_vertex_input teapot_vs{ teapot_model, view, persp };
+
+		executeRenderingPipeline(
+			teapot_shader_program,
+			std::span(teapot.m_vertices),
+			std::span(teapot.m_indices),
+			teapot_vs,
+			Empty{},
+			*g_engine.m_executor,
+			g_engine.m_main_window,
+			false
+		); 
 
 		g_engine.m_main_window.draw();
 	}

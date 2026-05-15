@@ -31,13 +31,14 @@ public:
 
 	~ConsoleWindow() { destroy(); }
 
+public:
+	FloatFramebuffer m_z_framebuffer;
+	CharFramebuffer m_main_framebuffer;
+
 private:
 	void inputThread(std::atomic<bool>& stop_flag);
 
 private:
-	FloatFramebuffer m_z_framebuffer;
-	CharFramebuffer m_main_framebuffer;
-
 	std::mutex m_input_mtx;
 	std::queue<wchar_t> m_input_queue;
 	std::thread m_input_thread;

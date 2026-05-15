@@ -6,7 +6,11 @@ macro(set_policy policy state)
     if(POLICY ${policy})
         cmake_policy(SET ${policy} ${state})
     else()
-        message(WARNING "Policy ${policy} is not available in this CMake version")
+        message(
+            WARNING 
+            "Policy ${policy} is not"
+            "available in this CMake version"    
+        )
     endif()
 endmacro()
 
@@ -19,33 +23,49 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 cmake_path(
-    APPEND CMAKE_CURRENT_SOURCE_DIR "external_libs" 
+    APPEND CMAKE_CURRENT_SOURCE_DIR 
+    "external_libs" 
     OUTPUT_VARIABLE EXTERNAL_LIBS_DIR
 )
 
 cmake_path(SET FETCHCONTENT_BASE_DIR ${EXTERNAL_LIBS_DIR})
 
-cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "data" OUTPUT_VARIABLE DATA_DIR)
-cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "src" OUTPUT_VARIABLE SRC_DIR)
+cmake_path(
+    APPEND CMAKE_CURRENT_SOURCE_DIR 
+    "data" 
+    OUTPUT_VARIABLE DATA_DIR
+)
+cmake_path(
+    APPEND CMAKE_CURRENT_SOURCE_DIR 
+    "src" 
+    OUTPUT_VARIABLE SRC_DIR
+)
 
-if(EXISTS assimp)
-    cmake_path(SET ASSIMP_DIR assimp)
-elseif(EXISTS "$ENV{ASSIMP_DIR}")
+if(EXISTS "$ENV{ASSIMP_DIR}")
     cmake_path(SET ASSIMP_DIR "$ENV{ASSIMP_DIR}")    
 else()
-    message(FATAL_ERROR 
+    message(
+        FATAL_ERROR 
         "couldn't find assimp, specify environment variable"
-        "ASSIMP_DIR to assimp root directory]="
+        "ASSIMP_DIR to assimp root directory"
     )
 endif() 
 
-cmake_path(APPEND ASSIMP_DIR "build" OUTPUT_VARIABLE ASSIMP_BUILD_DIR)
+cmake_path(
+    APPEND ASSIMP_DIR 
+    "build"
+    OUTPUT_VARIABLE ASSIMP_BUILD_DIR
+)
 
-project(ASCIIDraw VERSION 1.0.0 LANGUAGES CXX)
+project(
+    ASCIIDraw 
+    VERSION 1.0.0 
+    LANGUAGES CXX
+)
 
 block()
     set(CMAKE_FOLDER "ExternalLibs/Assimp")
-    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(BUILD_SHARED_LIBS OFF)
     add_subdirectory(${ASSIMP_DIR} ${ASSIMP_BUILD_DIR} SYSTEM)
 endblock()
 
@@ -87,15 +107,15 @@ file(
     GLOB_RECURSE 
     SRC_FILES 
     CONFIGURE_DEPENDS 
-    ${SRC_DIR}/*.h 
-    ${SRC_DIR}/*.cpp
+        ${SRC_DIR}/*.h 
+        ${SRC_DIR}/*.cpp
 )   
 
 file(
     GLOB_RECURSE 
     DATA_FILES 
     CONFIGURE_DEPENDS 
-    ${DATA_DIR}/*
+        ${DATA_DIR}/*
 )
 
 set_source_files_properties(
@@ -104,10 +124,22 @@ set_source_files_properties(
         HEADER_FILE_ONLY ON
 )
 
-add_executable(Main ${SRC_FILES} ${DATA_FILES})
+add_executable(
+    Main 
+        ${SRC_FILES} 
+        ${DATA_FILES}
+)
 
-source_group(Sources FILES ${SRC_FILES})
-source_group(Data FILES ${DATA_FILES})
+source_group(
+    Sources 
+    FILES 
+        ${SRC_FILES}
+)
+source_group(
+    Data 
+    FILES 
+        ${DATA_FILES}
+)
 
 target_link_libraries(
     Main 
@@ -122,11 +154,6 @@ target_compile_definitions(
     PRIVATE
         $<$<CONFIG:Debug>:DATA_PATH="${DATA_DIR}">
         NOMINMAX
-)
-
-set_directory_properties(
-    PROPERTIES 
-        VS_STARTUP_PROJECT Main
 )
 
 include(add_targets_to_folder)
@@ -146,6 +173,11 @@ add_copy_dir_dependency(
     DIRECTORY ${DATA_DIR} 
     INCLUDE_ROOT
     CONDITION $<CONFIG:Release>
+)
+
+set_directory_properties(
+    PROPERTIES 
+        VS_STARTUP_PROJECT Main
 )
 
 set_target_properties(
@@ -176,7 +208,7 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
 )
 set(CPACK_PACKAGE_INSTALL_DIRECTORY ${CPACK_PACKAGE_NAME})
 set(CPACK_VERBATIM_VARIABLES ON)
-set(CPACK_GENERATOR NSIS;ZIP)
+set(CPACK_GENERATOR "NSIS;ZIP")
 
 include(CPack)
 

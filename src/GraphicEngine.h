@@ -19,22 +19,33 @@ template <
 class ShaderProgram
 {
 public:
-	using VertexShaderType = void (*)(xm::vec4&, VertexType&, UserVertexShaderInput&, UserVertexShaderOutput&);
-	using FragmentShaderType = char (*)(UserVertexShaderOutput&, UserFragmentShaderInput&);
+	using VertexShaderType = void (*)(
+		xm::vec4&, 
+		VertexType&, 
+		const UserVertexShaderInput&, 
+		const UserVertexShaderOutput&
+	);
+	using FragmentShaderType = char (*)(
+		const UserVertexShaderOutput&, 
+		const UserFragmentShaderInput&
+	);
 
 	ShaderProgram(VertexShaderType vertex_shader, FragmentShaderType fragment_shader)
 		: m_vertex_shader(vertex_shader), m_fragment_shader(fragment_shader) {
 	}
 
-	void executeVertexShader(xm::vec4& position, VertexType& vertex,
-		UserVertexShaderInput& user_vertex_input,
+	void executeVertexShader(
+		xm::vec4& position, 
+		VertexType& vertex,
+		const UserVertexShaderInput& user_vertex_input,
 		UserVertexShaderOutput& user_vertex_output)
 	{
 		m_vertex_shader(position, vertex, user_vertex_input, user_vertex_output);
 	}
 
-	char executeFragmentShader(UserVertexShaderOutput& user_vertex_output,
-		UserFragmentShaderInput& user_fragment_input)
+	char executeFragmentShader(
+		const UserVertexShaderOutput& user_vertex_output,
+		const UserFragmentShaderInput& user_fragment_input)
 	{
 		return m_fragment_shader(user_vertex_output, user_fragment_input);
 	}
@@ -47,8 +58,14 @@ private:
 template<typename UserVertexShaderOutput>
 void computeVertexOutputForFragment(
 	float correct_z,
-	float alpha, float beta, float gamma,
-	UserVertexShaderOutput a, UserVertexShaderOutput b, UserVertexShaderOutput c, UserVertexShaderOutput& output)
+	float alpha, 
+	float beta, 
+	float gamma,
+	UserVertexShaderOutput a, 
+	UserVertexShaderOutput b, 
+	UserVertexShaderOutput c, 
+	UserVertexShaderOutput& output
+)
 {
 	float* fptr = reinterpret_cast<float*>(&output);
 
@@ -81,9 +98,25 @@ template<
 	std::size_t Extent1,
 	std::size_t Extent2
 >
-void executeRenderingPipeline(ShaderProgram<VertexType, UserVertexShaderInput, UserVertexShaderOutput, UserFragmentShaderInput>& shader_program, std::span<VertexType, Extent1> vertices, std::span<xm::uvec3, Extent2> indices, UserVertexShaderInput& vertex_input, UserFragmentShaderInput& fragment_input, BroadcastExecutor& exec, ConsoleWindow& main_window, bool backface_culling = true)
+void executeRenderingPipeline(
+	ShaderProgram<
+		VertexType,
+		UserVertexShaderInput, 
+		UserVertexShaderOutput, 
+		UserFragmentShaderInput>& shader_program, 
+	std::span<VertexType, Extent1> vertices, 
+	std::span<xm::uvec3, Extent2> indices,
+	const UserVertexShaderInput& vertex_input, 
+	const UserFragmentShaderInput& fragment_input, 
+	BroadcastExecutor& exec, 
+	ConsoleWindow& main_window, 
+	bool backface_culling = true
+)
 {
-	static_assert((sizeof(UserVertexShaderOutput) % sizeof(float) == 0 || sizeof(UserVertexShaderOutput) == 1) && "UserVertexShaderOutput must contain only float-point data");
+	static_assert(
+		(sizeof(UserVertexShaderOutput) % sizeof(float) == 0 || 
+		sizeof(UserVertexShaderOutput) == 1) 
+		&& "UserVertexShaderOutput must contain only float-point data");
 	static std::vector<InternalVertexShaderOutput<UserVertexShaderOutput>> internal_output(512 < vertices.size() ? vertices.size() : 512);
 
 	// vertex shading
