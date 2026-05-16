@@ -44,25 +44,22 @@ public:
 Engine g_engine;
 
 void teapotScene();
+void osakaScene();
+void landscapeScene();
 
 int main(int argc, char* argv[])
 {
 	g_engine.init();
 
-	//Texture awesomeface_tex = loadTexture("awesomeface.png", FilteringType::BILINEAR);
-	//Texture weapon_tex = loadTexture("weapon.jpg");
-		/*
-	Texture mid_intensity_tex;
-	mid_intensity_tex.init(xm::ivec2(40, 40), nullptr, FilteringType::NEAREST);
-	mid_intensity_tex.fillPattern([](xm::vec2 uv)
-		{
-		return g_mid_intensity_symbol;
-		},
-		current_exec);
+	//teapotScene();
 
-	*/
+	//osakaScene();
 	
-	/*
+	landscapeScene();
+}
+
+void osakaScene()
+{
 	Texture checkerboard_tex;
 	checkerboard_tex.init(xm::ivec2(40, 40), nullptr, FilteringType::BILINEAR);
 	checkerboard_tex.fillPattern([](xm::vec2 uv)
@@ -71,36 +68,142 @@ int main(int argc, char* argv[])
 			int y = uv.y * 4.0f;
 
 			int sum = (x + y) % 2;
-			if (sum == 0) 
+			if (sum == 0)
 			{
 				return getIntensitySymbolF(0.0f);
 			}
-			else 
+			else
 			{
 				return getIntensitySymbolF(1.0f);
 			}
-			
+
 		}, *g_engine.m_executor);
-	
-	Model cube;
-	ModelEntry cube_entry;
-	cube_entry.mesh = g_cube_mesh;
-	cube_entry.texture = &checkerboard_tex;
-	cube.m_entries.emplace_back(cube_entry);
-	*/
-	/*
+
 	Model girl = loadModel("osaka.obj");
 	Mesh& girl_mesh = girl.m_entries.front().mesh;
 	Texture* girl_tex = girl.m_entries.front().texture;
 
 	girl_tex->setFilteringType(FilteringType::BILINEAR);
-	Texture& current_texture = *girl_tex;
-	Mesh& current_mesh = girl_mesh;
-	
-	Texture& current_texture = checkerboard_tex;
-	Mesh& current_mesh = g_cube_mesh;
-	*/
-	/*
+
+	auto last_time = chrono::steady_clock::now();
+
+	struct _vs_in
+	{
+		xm::mat4& model;
+		xm::mat4& view;
+		xm::mat4& perspective;
+	};
+
+	struct _vs_out
+	{
+		xm::vec2 uv;
+	};
+
+	struct _fs_in
+	{
+		Texture& tex;
+	};
+
+	xm::vec3 girl_scale(0.2f);
+	xm::vec3 girl_pos{ 1.0f, -10.0f, -20.0f };
+	float girl_rot_yaw_rad = 0.0f;
+	float girl_rot_yaw_speed = xm::PI / 8;
+
+	xm::mat4 cube_model(1.0f);
+	xm::vec3 cube_scale{ 5.0f, 0.5f, 5.0f };
+	xm::vec3 cube_pos{ 1.0f, -11.0f, -21.0f };
+
+	cube_model = xm::scale(cube_model, cube_scale);
+	cube_model = xm::translate(cube_model, cube_pos);
+
+	ShaderProgram<Vertex, _vs_in, _vs_out, _fs_in> shader_program(
+		[](
+			xm::vec4& position,
+			const Vertex& vertex,
+			const _vs_in& vs_in,
+			_vs_out& vs_out) -> void
+		{
+			xm::vec3 vert = vertex.pos;
+			xm::vec4 world = vs_in.model * xm::vec4(vert, 1.0f);
+			xm::vec4 look = vs_in.view * world;
+			xm::vec4 clip = vs_in.perspective * look;
+
+			vs_out.uv = vertex.uv;
+			position = clip;
+		},
+		[](
+			const _vs_out& vs_in,
+			const _fs_in& fs_in) -> char
+		{
+			return fs_in.tex.getValueUV(vs_in.uv);
+		}
+	);
+
+	g_engine.m_main_window.m_clear_symbol = g_mid_intensity_symbol;
+
+	while (!g_engine.m_stop)
+	{
+		g_engine.m_main_window.clear();
+
+		auto time = chrono::steady_clock::now();
+		float delta = chrono::duration<float>(time - last_time).count();
+		last_time = time;
+
+		g_engine.processInput();
+		g_engine.m_camera.update(delta);
+
+		xm::mat4 persp = g_engine.m_camera.getPerspectiveMatrix();
+		xm::mat4 view = g_engine.m_camera.getViewMatrix();
+
+		xm::mat4 osaka_model(1.0f);
+		osaka_model = xm::scale(osaka_model, girl_scale);
+		girl_rot_yaw_rad += delta * girl_rot_yaw_speed;
+		osaka_model = xm::rotate(osaka_model, xm::vec3(0.0f, 1.0f, 0.0f), girl_rot_yaw_rad);
+		
+		osaka_model = xm::translate(osaka_model, girl_pos);
+
+		_vs_in osaka_vs_in{ osaka_model, view, persp };
+		_fs_in osaka_fs_in{ *girl.m_entries.back().texture };
+		
+		executeRenderingPipeline(
+			shader_program,
+			std::span(girl_mesh.m_vertices),
+			std::span(girl_mesh.m_indices),
+			osaka_vs_in,
+			osaka_fs_in,
+			*g_engine.m_executor,
+			g_engine.m_main_window
+		);
+
+		_vs_in cube_vs_in{ cube_model, view, persp };
+		_fs_in cube_fs_in{ checkerboard_tex };
+
+		executeRenderingPipeline(
+			shader_program,
+			std::span(g_cube_mesh.m_vertices),
+			std::span(g_cube_mesh.m_indices),
+			cube_vs_in,
+			cube_fs_in,
+			*g_engine.m_executor,
+			g_engine.m_main_window
+		);
+
+		g_engine.m_main_window.draw();
+	}
+
+}
+
+void landscapeScene()
+{
+	auto last_time = chrono::steady_clock::now();
+
+	struct _vertex_input
+	{
+		xm::mat4& model;
+		xm::mat4& view;
+		xm::mat4& perspective;
+	};
+
 	struct _object_vertex_output
 	{
 		xm::vec2 uv;
@@ -117,24 +220,23 @@ int main(int argc, char* argv[])
 	{
 		float light_intensity;
 	};
-	
+
 	struct _object_fragment_input
 	{
 		float object_intensity;
 		float light_intensity;
 		xm::vec3 light_pos;
 		xm::vec3 view_pos;
-	};*/
-	
-	//Mesh landscape = generateLandscape(30.0f, 30.0f, 30, 30, [](float x, float z) {return 1.5f * sinf(x * 0.5f) * 1.5f * cosf(z * 0.5f); });
+	};
 
-	teapotScene();
+	Mesh landscape = generateLandscape(30.0f, 30.0f, 30, 30, [](float x, float z) {return 1.5f * sinf(x * 0.5f) * 1.5f * cosf(z * 0.5f); });
 
-
-	/*
 	ShaderProgram<Vertex, _vertex_input, _object_vertex_output, _object_fragment_input> object_shader_program(
-		//vertex shader
-		[](xm::vec4& position, Vertex& vertex, _vertex_input& vs_in, _object_vertex_output& vs_out) -> void
+		[](
+			xm::vec4& position, 
+			const Vertex& vertex, 
+			const _vertex_input& vs_in, 
+			_object_vertex_output& vs_out) -> void
 		{
 			xm::vec3 vert = vertex.pos;
 			xm::vec4 world = vs_in.model * xm::vec4(vert, 1.0f);
@@ -147,8 +249,9 @@ int main(int argc, char* argv[])
 
 			position = clip;
 		},
-		//fragment shader
-		[](_object_vertex_output& vs_in, _object_fragment_input& fs_in) -> char
+		[](
+			const _object_vertex_output& vs_in, 
+			const _object_fragment_input& fs_in) -> char
 		{
 			xm::vec3 normal = xm::normalize(vs_in.normal);
 			xm::vec3 to_light_dir = xm::normalize(fs_in.light_pos - vs_in.frag_world);
@@ -168,11 +271,14 @@ int main(int argc, char* argv[])
 			return getIntensitySymbolF((ambient + diffuse + specular) * fs_in.object_intensity);
 		}
 	);
-	
+
 
 	ShaderProgram<Vertex, _vertex_input, _light_vertex_output, _light_fragment_input> light_shader_program(
-		//vertex shader
-		[](xm::vec4& position, Vertex& vertex, _vertex_input& vs_in, _light_vertex_output& vs_out) -> void
+		[](
+			xm::vec4& position, 
+			const Vertex& vertex, 
+			const _vertex_input& vs_in, 
+			_light_vertex_output& vs_out) -> void
 		{
 			xm::vec3 vert = vertex.pos;
 			xm::vec4 world = vs_in.model * xm::vec4(vert, 1.0f);
@@ -180,26 +286,16 @@ int main(int argc, char* argv[])
 			xm::vec4 clip = vs_in.perspective * look;
 			position = clip;
 		},
-		//fragment shader
-		[](_light_vertex_output& vs_in, _light_fragment_input& fs_in) -> char
+		[](
+			const _light_vertex_output& vs_in, 
+			const _light_fragment_input& fs_in) -> char
 		{
 			return getIntensitySymbolF(fs_in.light_intensity);
 		}
-	);*/
+	);
 
-	/*
-	xm::vec3 girl_scale( 0.2f);
-	xm::vec3 girl_pos{ 1.0f, -10.0f, -20.0f };
-	float girl_rot_yaw_rad = 0.0f;
-	float girl_rot_yaw_speed = xm::PI / 8;
-
-	xm::vec3 cube_scale{ 5.0f, 0.5f, 5.0f };
-	xm::vec3 cube_pos{ 1.0f, -11.0f, -21.0f };
-	*/
-	
-	/*
 	xm::vec3 object_scale{ 3.0f, 3.0f, 3.0f };
-	xm::vec3 object_pos{ 0.0f, 0.0f, -15.0f };
+	xm::vec3 object_pos{ 0.0f, -30.0f, -15.0f };
 
 	float object_roll = 0.0f;
 	float object_pitch = 0.0f;
@@ -208,26 +304,23 @@ int main(int argc, char* argv[])
 	float object_pitch_speed = xm::PI / 6.0f;
 
 	xm::vec3 light_scale{ 0.5f, 0.5f, 0.5f };
-	xm::vec3 light_start{ 10.0f, 6.0f, -12.0f };
-	*/
+	xm::vec3 light_start{ 10.0f, -15.0f, -12.0f };
 
-/*
 	while (!g_engine.m_stop)
 	{
 		g_engine.m_main_window.clear();
-
+	
 		auto time = chrono::steady_clock::now();
 		float delta = chrono::duration<float>(time - last_time).count();
 		last_time = time;
+		float time_integral = chrono::duration<float>(last_time.time_since_epoch()).count();
 
 		g_engine.processInput();
 		g_engine.m_camera.update(delta);
-		
+
 		xm::mat4 persp = g_engine.m_camera.getPerspectiveMatrix();
 		xm::mat4 view = g_engine.m_camera.getViewMatrix();
 
-		
-		
 		object_roll += object_roll_speed * delta;
 		object_pitch += object_pitch_speed * delta;
 		float light_intensity = 1.0f;
@@ -236,7 +329,6 @@ int main(int argc, char* argv[])
 
 		light_pos.x += 10 * sin(time_integral);
 		light_pos.z += 5 * sin(time_integral);
-
 
 		xm::mat4 light_model(1.0f);
 		light_model = xm::scale(light_model, light_scale);
@@ -248,8 +340,8 @@ int main(int argc, char* argv[])
 
 		executeRenderingPipeline(
 			light_shader_program,
-			std::span(cube_entry.mesh.m_vertices),
-			std::span(cube_entry.mesh.m_indices),
+			std::span(g_cube_mesh.m_vertices),
+			std::span(g_cube_mesh.m_indices),
 			light_vs,
 			light_fs,
 			*g_engine.m_executor,
@@ -258,6 +350,9 @@ int main(int argc, char* argv[])
 		);
 
 		xm::mat4 landscape_model(1.0f);
+
+		landscape_model = xm::scale(landscape_model, object_scale);
+		landscape_model = xm::translate(landscape_model, object_pos);
 
 		_vertex_input object_vs{ landscape_model, view, persp };
 		_object_fragment_input object_fs;
@@ -275,70 +370,9 @@ int main(int argc, char* argv[])
 			*g_engine.m_executor,
 			g_engine.m_main_window
 		);
-		*/
-
-
-
-		/*
-		xm::mat4 object_model(1.0f);
-		object_model = xm::scale(object_model, object_scale);
-		object_model = xm::rotate(object_model, xm::vec3(1.0f, 0.0f, 0.0f), object_pitch);
-		object_model = xm::rotate(object_model, xm::vec3(0.0f, 0.0f, 1.0f), object_roll);
-		object_model = xm::translate(object_model, object_pos);
 		
-		executeRenderingPipeline(
-			object_shader_program,
-			std::span(cube_entry.mesh.m_vertices),
-			std::span(cube_entry.mesh.m_indices),
-			object_vs,
-			object_fs,
-			*g_engine.m_executor,
-			g_engine.m_main_window,
-			false
-		);
-		*/
-
-		/* 
-		girl_rot_yaw_rad += girl_rot_yaw_speed * delta;
-		xm::mat4 girl_model(1.0f);
-		girl_model = xm::scale(girl_model, girl_scale);
-		girl_model = xm::rotate(girl_model, xm::vec3(0.0f, 1.0f, 0.0f), girl_rot_yaw_rad);
-		girl_model = xm::translate(girl_model, girl_pos);
-		
-		_vertex_input vs_in1{ girl_model, view, persp };
-		
-		for(auto& e : girl.m_entries)
-		{
-			_fragment_input fs_in1{ *e.texture };
-			executeRenderingPipeline(shader_program, std::span(e.mesh.m_vertices), std::span(e.mesh.m_indices), vs_in1, fs_in1, current_exec, g_main_window);
-		}
-		
-		xm::mat4 cube_model(1.0f);
-		cube_model = xm::scale(cube_model, cube_scale);
-		cube_model = xm::translate(cube_model, cube_pos);
-
-		_vertex_input vs_in2{ cube_model, view, persp };
-		_fragment_input fs_in2{ *cube.m_entries.back().texture };
-		
-		executeRenderingPipeline(shader_program, std::span(cube.m_entries.back().mesh.m_vertices), std::span(cube.m_entries.back().mesh.m_indices), vs_in2, fs_in2, current_exec, g_main_window, false);
-		
-		xm::mat4 landscape_model(1.0f);
-		_vertex_input vs_in3{ landscape_model, view, persp };
-		_fragment_input fs_in3{ checkerboard_tex };
-
-		executeRenderingPipeline(
-			shader_program, 
-			std::span(landscape.m_vertices), 
-			std::span(landscape.m_indices), 
-			vs_in3, 
-			fs_in3, 
-			*g_engine.m_executor,
-			g_engine.m_main_window
-		);
-		*/
-
-//		g_engine.m_main_window.draw();
-	//}
+		g_engine.m_main_window.draw();
+	}
 }
 
 void teapotScene()
@@ -356,7 +390,6 @@ void teapotScene()
 	struct Empty {};
 
 	ShaderProgram<SimpleVertex, _vertex_input, Empty, Empty> teapot_shader_program(
-		//vertex shader
 		[](
 			xm::vec4& position, 
 			const SimpleVertex& vertex, 
@@ -369,7 +402,6 @@ void teapotScene()
 			xm::vec4 clip = vs_in.perspective * look;
 			position = clip;
 		},
-		//fragment shader
 		[](
 			const Empty& vs_in, 
 			const Empty& fs_in) -> char
@@ -403,7 +435,6 @@ void teapotScene()
 	};
 
 	ShaderProgram<SimpleVertex, _skybox_vs_in, _skybox_vs_out, _skybox_fs_in> skybox_shader_program(
-		//vertex shader
 		[](
 			xm::vec4& position,
 			const SimpleVertex& vertex,
@@ -417,7 +448,6 @@ void teapotScene()
 
 			vs_out.cubemap_coords = xm::vec3(world_dir); 
 		},
-		//fragment shader
 		[](
 			const _skybox_vs_out& vs_in,
 			const _skybox_fs_in& fs_in) -> char
@@ -444,6 +474,7 @@ void teapotScene()
 		auto time = chrono::steady_clock::now();
 		float delta = chrono::duration<float>(time - last_time).count();
 		last_time = time;
+		float time_integral = chrono::duration<float>(last_time.time_since_epoch()).count();
 
 		g_engine.processInput();
 		g_engine.m_camera.update(delta);
@@ -453,7 +484,6 @@ void teapotScene()
 
 		xm::mat4 inv_view_proj = xm::inverse(persp * xm::mat4(xm::mat3(view)));
 
-		float time_integral = chrono::duration<float>(last_time.time_since_epoch()).count();
 		_skybox_vs_in skybox_vs_in{ inv_view_proj };
 		
 		_skybox_fs_in skybox_fs_in{ skybox_cubemap };

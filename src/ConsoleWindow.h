@@ -18,7 +18,7 @@ class ConsoleWindow
 public:
 	const xm::ivec2 m_size{ 900, 200 };
 	const float m_aspect = static_cast<float>(m_size.width * 0.35f) / (static_cast<float>(m_size.height));
-	const char m_clear_symbol = g_min_intensity_symbol;
+	char m_clear_symbol = g_min_intensity_symbol;
 
 public:
 	void init(std::atomic<bool>& stop_flag);
