@@ -53,7 +53,7 @@ private:
     std::string m_texture_buffer;
     xm::ivec2 m_size;
     FilteringType m_filtering_type = FilteringType::BILINEAR;
-    std::vector<Texture> m_mip_maps;
+    //std::vector<Texture> m_mip_maps;
 };
 
 Texture loadTexture(std::string_view filename, FilteringType filtering_type = FilteringType::NEAREST);
@@ -73,3 +73,30 @@ inline void Texture::fillPattern(const UVPred& pred, BroadcastExecutor& exec)
             elem = pred(uv);
         }, std::span(m_texture_buffer));
 }
+
+class Cubemap 
+{
+public:
+    void init(xm::ivec2 size, uchar* data[6], FilteringType filtering_type = FilteringType::NEAREST);
+
+    char getValueByCoords(xm::vec3 xyz) const;
+
+    void setFilteringType(FilteringType type)
+    {
+        m_filtering_type = type;
+    }
+
+private:
+
+    xm::ivec2 m_size;
+    FilteringType m_filtering_type = FilteringType::BILINEAR;
+    // 0 -> +x
+    // 1 -> -x
+    // 2 -> +y
+    // 3 -> -y
+    // 4 -> +z
+    // 5 -> -z
+    Texture m_textures[6];
+};
+
+Cubemap loadCubemap(std::string_view filenames[6], FilteringType filtering_type = FilteringType::NEAREST);

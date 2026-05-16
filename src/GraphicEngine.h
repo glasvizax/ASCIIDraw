@@ -21,9 +21,9 @@ class ShaderProgram
 public:
 	using VertexShaderType = void (*)(
 		xm::vec4&, 
-		VertexType&, 
+		const VertexType&, 
 		const UserVertexShaderInput&, 
-		const UserVertexShaderOutput&
+		UserVertexShaderOutput&
 	);
 	using FragmentShaderType = char (*)(
 		const UserVertexShaderOutput&, 
@@ -110,7 +110,8 @@ void executeRenderingPipeline(
 	const UserFragmentShaderInput& fragment_input, 
 	BroadcastExecutor& exec, 
 	ConsoleWindow& main_window, 
-	bool backface_culling = true
+	bool backface_culling = true,
+	bool z_testing = true
 )
 {
 	static_assert(
@@ -267,7 +268,8 @@ void executeRenderingPipeline(
 				beta0,
 				gamma_y_step,
 				gamma_x_step,
-				gamma0
+				gamma0,
+				z_testing
 
 			]
 			(uint thread_idx, uint thread_count)
@@ -329,11 +331,23 @@ void executeRenderingPipeline(
 						continue;
 					}
 
-					float for_zbuf = z0_proj * alpha + z1_proj * beta + z2_proj * gamma;
+					
 
-					float buffer_z = main_window.m_z_framebuffer.getValue(curr);
+					bool z_pass;
+					float for_zbuf;
+					if(z_testing)
+					{
+						for_zbuf = z0_proj * alpha + z1_proj * beta + z2_proj * gamma;
+						float buffer_z = main_window.m_z_framebuffer.getValue(curr);
 
-					if (for_zbuf < buffer_z)
+						z_pass = for_zbuf < buffer_z;
+					}
+					else 
+					{
+						z_pass = true;
+					}
+
+					if (z_pass)
 					{
 						float correct_z = 1.0f / (w0_recip * alpha + w1_recip * beta + w2_recip * gamma);
 						char current_symbol;
@@ -385,7 +399,10 @@ void executeRenderingPipeline(
 						current_symbol = shader_program.executeFragmentShader(current_uo, fragment_input);
 						main_window.m_main_framebuffer.setValue(curr, current_symbol);
 #endif
-						main_window.m_z_framebuffer.setValue(curr, for_zbuf);
+						if (z_testing) 
+						{
+							main_window.m_z_framebuffer.setValue(curr, for_zbuf);
+						}
 					}
 					
 				}

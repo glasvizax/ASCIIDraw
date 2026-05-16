@@ -35,6 +35,7 @@ cmake_path(
     "data" 
     OUTPUT_VARIABLE DATA_DIR
 )
+
 cmake_path(
     APPEND CMAKE_CURRENT_SOURCE_DIR 
     "src" 
@@ -133,8 +134,9 @@ add_executable(
 source_group(
     Sources 
     FILES 
-        ${SRC_FILES}
+       ${SRC_FILES}
 )
+
 source_group(
     Data 
     FILES 

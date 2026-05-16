@@ -352,16 +352,16 @@ void teapotScene()
 		xm::mat4& perspective;
 	};
 
-	SimpleMesh teapot = generateTeapotMesh(6);
+	SimpleMesh teapot = generateTeapotMesh(3);
 	struct Empty {};
 
 	ShaderProgram<SimpleVertex, _vertex_input, Empty, Empty> teapot_shader_program(
 		//vertex shader
 		[](
 			xm::vec4& position, 
-			SimpleVertex& vertex, 
+			const SimpleVertex& vertex, 
 			const _vertex_input& vs_in, 
-			const Empty& vs_out) -> void
+			Empty& vs_out) -> void
 		{
 			xm::vec3 vert = vertex.pos;
 			xm::vec4 world = vs_in.model * xm::vec4(vert, 1.0f);
@@ -378,6 +378,65 @@ void teapotScene()
 		}
 	);
 
+	SimpleMesh fullscreen_quad;
+	fullscreen_quad.m_vertices = {
+		{{-1.0f, -1.0f, 0.0f}},
+		{{ 1.0f, -1.0f, 0.0f}},
+		{{-1.0f,  1.0f, 0.0f}},
+		{{ 1.0f,  1.0f, 0.0f}}
+	};
+	fullscreen_quad.m_indices = { {0, 1, 2}, {1, 3, 2} };
+
+	struct _skybox_vs_in 
+	{
+		xm::mat4 inv_view_proj;
+	};
+
+	struct _skybox_vs_out
+	{
+		xm::vec3 cubemap_coords;
+	};
+
+	struct _skybox_fs_in
+	{
+		Cubemap& skybox_cubemap;
+	};
+
+	ShaderProgram<SimpleVertex, _skybox_vs_in, _skybox_vs_out, _skybox_fs_in> skybox_shader_program(
+		//vertex shader
+		[](
+			xm::vec4& position,
+			const SimpleVertex& vertex,
+			const _skybox_vs_in& vs_in,
+			_skybox_vs_out& vs_out) -> void
+		{
+			position = xm::vec4(vertex.pos.x, vertex.pos.y, 0.999f, 1.0f);
+
+			xm::vec4 clip_pos = xm::vec4(vertex.pos.x, vertex.pos.y, 1.0f, 1.0f);
+			xm::vec4 world_dir = vs_in.inv_view_proj * clip_pos;
+
+			vs_out.cubemap_coords = xm::vec3(world_dir); 
+		},
+		//fragment shader
+		[](
+			const _skybox_vs_out& vs_in,
+			const _skybox_fs_in& fs_in) -> char
+		{
+			return fs_in.skybox_cubemap.getValueByCoords(vs_in.cubemap_coords);
+		}
+	);
+
+	std::string_view cubemap_texs[6] = {
+			"skybox_daylight1.bmp",
+			"skybox_daylight2.bmp",
+			"skybox_daylight3.bmp",
+			"skybox_daylight4.bmp",
+			"skybox_daylight5.bmp",
+			"skybox_daylight6.bmp",
+	};
+
+	Cubemap skybox_cubemap = loadCubemap(cubemap_texs);
+
 	while (!g_engine.m_stop)
 	{
 		g_engine.m_main_window.clear();
@@ -392,24 +451,40 @@ void teapotScene()
 		xm::mat4 persp = g_engine.m_camera.getPerspectiveMatrix();
 		xm::mat4 view = g_engine.m_camera.getViewMatrix();
 
+		xm::mat4 inv_view_proj = xm::inverse(persp * xm::mat4(xm::mat3(view)));
+
 		float time_integral = chrono::duration<float>(last_time.time_since_epoch()).count();
+		_skybox_vs_in skybox_vs_in{ inv_view_proj };
+		
+		_skybox_fs_in skybox_fs_in{ skybox_cubemap };
+
+		executeRenderingPipeline(
+			skybox_shader_program,
+			std::span(fullscreen_quad.m_vertices),
+			std::span(fullscreen_quad.m_indices),
+			skybox_vs_in,
+			skybox_fs_in,
+			*g_engine.m_executor,
+			g_engine.m_main_window,
+			false, 
+			false
+		);
 
 		xm::mat4 teapot_model(1.0f);
 		teapot_model = xm::scale(teapot_model, xm::vec3(2.0f));
 		teapot_model = xm::rotate(teapot_model, xm::vec3(1.0f, 0.0f, 0.0f), xm::PI / 2.0);
 		teapot_model = xm::translate(teapot_model, xm::vec3(10.0f, 6.0f, -12.0f));
 
-		_vertex_input teapot_vs{ teapot_model, view, persp };
+		_vertex_input teapot_vs_in{ teapot_model, view, persp };
 
 		executeRenderingPipeline(
 			teapot_shader_program,
 			std::span(teapot.m_vertices),
 			std::span(teapot.m_indices),
-			teapot_vs,
+			teapot_vs_in,
 			Empty{},
 			*g_engine.m_executor,
-			g_engine.m_main_window,
-			false
+			g_engine.m_main_window
 		); 
 
 		g_engine.m_main_window.draw();

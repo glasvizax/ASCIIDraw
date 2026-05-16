@@ -24,6 +24,51 @@ Texture loadTexture(std::string_view filename, FilteringType filtering_type)
     return tex;
 }
 
+Cubemap loadCubemap(std::string_view filenames[6], FilteringType filtering_type)
+{
+    Cubemap tex3d;
+    stbi_uc* tex_datas[6];
+    int tex_width, tex_height;
+    
+    for (uint i = 0; i < 6; ++i) 
+    {
+        std::string path = g_data_path + fs::path(filenames[i]).filename().string();
+
+        int width, height, tex_channels;
+        tex_datas[i] = stbi_load(path.c_str(), &width, &height, &tex_channels, 1);
+        if (i == 0) 
+        {
+            tex_width = width;
+            tex_height = height;
+        }
+        else 
+        {
+            if(tex_width != width)
+            {
+                assert(false && "texture3d received textures of not the same size");
+            }
+            else if(tex_height != height)
+            {
+                assert(false && "texture3d received textures of not the same size");
+            }
+        }
+
+        if (!tex_datas[i])
+        {
+            assert(false && "couldn't load texture"); 
+        }
+    }
+
+    tex3d.init(xm::ivec2(tex_width, tex_height), tex_datas, filtering_type);
+
+    for (uint i = 0; i < 6; ++i)
+    {
+        stbi_image_free(tex_datas[i]);
+    }
+    
+    return tex3d;
+}
+
 void Texture::initAsMipMap(const Texture& prev)
 {
     m_size.x = prev.m_size.x / 2;
@@ -155,4 +200,75 @@ char Texture::getValue(xm::ivec2 pos) const
 {
     xm::ivec2 correct_pos = { pos.x % (m_size.x), pos.y % (m_size.y) };
     return m_texture_buffer[getIndex(correct_pos)];
+}
+
+
+void Cubemap::init(xm::ivec2 size, uchar* data[6], FilteringType filtering_type)
+{
+    m_size = size;
+    m_filtering_type = filtering_type;
+    for (uint i = 0; i < 6; ++i) 
+    {
+        m_textures[i].init(m_size, data[i], filtering_type);
+    }
+}
+
+char Cubemap::getValueByCoords(xm::vec3 xyz) const
+{
+    float x_abs = std::abs(xyz.x);
+    float y_abs = std::abs(xyz.y);
+    float z_abs = std::abs(xyz.z);
+    
+    if (x_abs >= y_abs && x_abs >= z_abs)
+    {
+        float mult = 1.0f / x_abs;
+        xyz.x = xyz.x > 0.0f ? 1.0f : -1.0f;
+        xyz.y *= mult;
+        xyz.z *= mult;
+
+        if (xyz.x > 0.0f)
+        {
+            xm::vec2 uv((-xyz.z + 1.0f) / 2.0f, (xyz.y + 1.0f) / 2.0f);
+            return m_textures[0].getValueUV(uv);
+        }
+        else
+        {
+            xm::vec2 uv((xyz.z + 1.0f) / 2.0f, (xyz.y + 1.0f) / 2.0f);
+            return m_textures[1].getValueUV(uv);
+        }
+
+    }
+    else if (y_abs >= x_abs && y_abs >= z_abs)
+    {
+        float mult = 1.0f / y_abs;
+        xyz.x *= mult;
+        xyz.z *= mult;
+
+        if (xyz.y > 0.0f)
+        {
+            xm::vec2 uv((xyz.x + 1.0f) / 2.0f, (-xyz.z + 1.0f) / 2.0f);
+            return m_textures[2].getValueUV(uv);
+        }
+        else
+        {
+            xm::vec2 uv((xyz.x + 1.0f) / 2.0f, (xyz.z + 1.0f) / 2.0f);
+            return m_textures[3].getValueUV(uv);
+        }
+    }
+    else
+    {
+        float mult = 1.0f / z_abs;
+        xyz.x *= mult;
+        xyz.y *= mult;
+        if(xyz.z > 0.0f)
+        {
+            xm::vec2 uv((xyz.x + 1.0f) / 2.0f, (xyz.y + 1.0f) / 2.0f);
+            return m_textures[4].getValueUV(uv);
+        }
+        else 
+        {
+            xm::vec2 uv((-xyz.x + 1.0f) / 2.0f, (xyz.y + 1.0f) / 2.0f);
+            return m_textures[5].getValueUV(uv);
+        }
+    }
 }
