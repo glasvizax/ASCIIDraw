@@ -1,9 +1,10 @@
+#pragma once
 
-// Teapot data
-#include "Aliases.h"
+// thanks to scratchapixel
 
 #include <xm/xm.h>
 
+#include "Aliases.h"
 #include "Model.h"
 
 const static uint16 kTeapotNumPatches = 32;

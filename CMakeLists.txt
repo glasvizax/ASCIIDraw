@@ -60,11 +60,12 @@ cmake_path(
 
 project(
     ASCIIDraw 
-    VERSION 1.0.0 
+    VERSION 2.0.0 
     LANGUAGES CXX
 )
 
 block()
+    set(ASSIMP_INSTALL OFF)
     set(CMAKE_FOLDER "ExternalLibs/Assimp")
     set(BUILD_SHARED_LIBS OFF)
     add_subdirectory(${ASSIMP_DIR} ${ASSIMP_BUILD_DIR} SYSTEM)
@@ -79,7 +80,7 @@ FetchContent_Declare(
 FetchContent_Declare(
 	XPERMath 
 	GIT_REPOSITORY https://github.com/glasvizax/XPERMath 
-	GIT_TAG v1.2 
+	GIT_TAG v1.3 
 	SYSTEM
 )
 
@@ -112,6 +113,8 @@ file(
         ${SRC_DIR}/*.cpp
 )   
 
+list(REMOVE_ITEM SRC_FILES "${SRC_DIR}/main.cpp")
+
 file(
     GLOB_RECURSE 
     DATA_FILES 
@@ -125,10 +128,31 @@ set_source_files_properties(
         HEADER_FILE_ONLY ON
 )
 
-add_executable(
-    Main 
+add_library(
+    Core 
+    OBJECT
         ${SRC_FILES} 
         ${DATA_FILES}
+)
+
+add_executable(
+    OsakaScene 
+        ${SRC_DIR}/main.cpp
+)
+
+add_executable(
+    LandscapeScene 
+        ${SRC_DIR}/main.cpp
+)
+
+target_link_libraries(OsakaScene PRIVATE Core)
+
+target_link_libraries(LandscapeScene PRIVATE Core)
+
+target_compile_definitions(
+    LandscapeScene
+    PRIVATE
+        LANDSCAPE_SCENE
 )
 
 source_group(
@@ -144,16 +168,16 @@ source_group(
 )
 
 target_link_libraries(
-    Main 
-    PRIVATE 
+    Core 
+    PUBLIC 
         XPER::Math
         stb
         assimp::assimp
 ) 
 
 target_compile_definitions(
-    Main
-    PRIVATE
+    Core
+    PUBLIC
         $<$<CONFIG:Debug>:DATA_PATH="${DATA_DIR}">
         NOMINMAX
 )
@@ -162,16 +186,21 @@ include(add_targets_to_folder)
 
 add_targets_to_folder(
     FOLDER ExternalLibs 
-    TARGETS 
+    TARGETS
         XPER::Math
         XPER::CMakeUtils
         stb        
 )
 
-include(add_copy_dir_dependency)
+add_copy_dir_dependency(
+    TARGET LandscapeScene 
+    DIRECTORY ${DATA_DIR} 
+    INCLUDE_ROOT
+    CONDITION $<CONFIG:Release>
+)
 
 add_copy_dir_dependency(
-    TARGET Main 
+    TARGET OsakaScene
     DIRECTORY ${DATA_DIR} 
     INCLUDE_ROOT
     CONDITION $<CONFIG:Release>
@@ -179,19 +208,25 @@ add_copy_dir_dependency(
 
 set_directory_properties(
     PROPERTIES 
-        VS_STARTUP_PROJECT Main
+        VS_STARTUP_PROJECT OsakaScene
 )
 
 set_target_properties(
-    Main 
+    OsakaScene 
     PROPERTIES
-        VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:Main>"
+        VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:OsakaScene>"
+)
+
+set_target_properties(
+    LandscapeScene 
+    PROPERTIES
+        VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:LandscapeScene>"
 )
 
 include(GNUInstallDirs)
 
 install(
-    TARGETS Main
+    TARGETS OsakaScene LandscapeScene
     CONFIGURATIONS Release
 )
 
@@ -200,8 +235,6 @@ install(
     TYPE BIN
     CONFIGURATIONS Release
 )
-
-# install(IMPORTED_RUNTIME_ARTIFACTS assimp::assimp)
 
 set(CPACK_PACKAGE_NAME "${PROJECT_NAME}")
 set(CPACK_PACKAGE_VENDOR "glasvizax")

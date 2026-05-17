@@ -51,11 +51,13 @@ int main(int argc, char* argv[])
 {
 	g_engine.init();
 
-	//teapotScene();
-
+#ifdef LANDSCAPE_SCENE
+	landscapeScene();
+#else
 	osakaScene();
+#endif
 	
-	//landscapeScene();
+	//teapotScene();
 }
 
 void osakaScene()
@@ -139,6 +141,67 @@ void osakaScene()
 		}
 	);
 
+	std::string_view cubemap_texs[6] = {
+		"skybox_daylight1.bmp",
+		"skybox_daylight2.bmp",
+		"skybox_daylight3.bmp",
+		"skybox_daylight4.bmp",
+		"skybox_daylight5.bmp",
+		"skybox_daylight6.bmp",
+	};
+
+	Cubemap skybox_cubemap = loadCubemap(cubemap_texs);
+
+	SimpleMesh fullscreen_quad;
+	fullscreen_quad.m_vertices = {
+		{{-1.0f, -1.0f, 0.0f}},
+		{{ 1.0f, -1.0f, 0.0f}},
+		{{-1.0f,  1.0f, 0.0f}},
+		{{ 1.0f,  1.0f, 0.0f}}
+	};
+
+	fullscreen_quad.m_indices = { {0, 1, 2}, {1, 3, 2} };
+
+	struct _skybox_vs_in
+	{
+		xm::mat4 inv_view_proj;
+	};
+
+	struct _skybox_vs_out
+	{
+		xm::vec3 cubemap_coords;
+	};
+
+	struct _skybox_fs_in
+	{
+		Cubemap& skybox_cubemap;
+	};
+
+	ShaderProgram<SimpleVertex, _skybox_vs_in, _skybox_vs_out, _skybox_fs_in> skybox_shader_program(
+		[](
+			xm::vec4& position,
+			const SimpleVertex& vertex,
+			const _skybox_vs_in& vs_in,
+			_skybox_vs_out& vs_out) -> void
+		{
+			position = xm::vec4(vertex.pos.x, vertex.pos.y, 0.999f, 1.0f);
+
+			xm::vec4 clip_pos = xm::vec4(vertex.pos.x, vertex.pos.y, 1.0f, 1.0f);
+			xm::vec4 world_dir = vs_in.inv_view_proj * clip_pos;
+
+			vs_out.cubemap_coords = xm::vec3(world_dir);
+		},
+		[](
+			const _skybox_vs_out& vs_in,
+			const _skybox_fs_in& fs_in) -> char
+		{
+			return fs_in.skybox_cubemap.getValueByCoords(vs_in.cubemap_coords);
+		}
+	);
+
+
+
+
 	g_engine.m_main_window.m_clear_symbol = g_mid_intensity_symbol;
 
 	while (!g_engine.m_stop)
@@ -154,6 +217,23 @@ void osakaScene()
 
 		xm::mat4 persp = g_engine.m_camera.getPerspectiveMatrix();
 		xm::mat4 view = g_engine.m_camera.getViewMatrix();
+
+		xm::mat4 inv_view_proj = xm::inverse(persp * xm::mat4(xm::mat3(view)));
+
+		_skybox_vs_in skybox_vs_in{ inv_view_proj };
+		_skybox_fs_in skybox_fs_in{ skybox_cubemap };
+
+		executeRenderingPipeline(
+			skybox_shader_program,
+			std::span(fullscreen_quad.m_vertices),
+			std::span(fullscreen_quad.m_indices),
+			skybox_vs_in,
+			skybox_fs_in,
+			*g_engine.m_executor,
+			g_engine.m_main_window,
+			false,
+			false
+		);
 
 		xm::mat4 osaka_model(1.0f);
 		osaka_model = xm::scale(osaka_model, girl_scale);
@@ -295,7 +375,7 @@ void landscapeScene()
 	);
 
 	xm::vec3 object_scale{ 3.0f, 3.0f, 3.0f };
-	xm::vec3 object_pos{ 0.0f, -30.0f, -15.0f };
+	xm::vec3 object_pos{ 0.0f, -30.0f, -50.0f };
 
 	float object_roll = 0.0f;
 	float object_pitch = 0.0f;
@@ -304,7 +384,13 @@ void landscapeScene()
 	float object_pitch_speed = xm::PI / 6.0f;
 
 	xm::vec3 light_scale{ 0.5f, 0.5f, 0.5f };
-	xm::vec3 light_start{ 10.0f, -15.0f, -12.0f };
+	xm::vec3 light_start{ 10.0f, -15.0f, -50.0f };
+
+	g_engine.m_camera.lookDown();
+	g_engine.m_camera.lookDown();
+	g_engine.m_camera.lookDown();
+	g_engine.m_camera.lookDown();
+	g_engine.m_camera.m_far_plane = 200.0f;	
 
 	while (!g_engine.m_stop)
 	{
@@ -465,7 +551,7 @@ void teapotScene()
 			"skybox_daylight6.bmp",
 	};
 
-	Cubemap skybox_cubemap = loadCubemap(cubemap_texs);
+	Cubemap skybox_cubemap = loadCubemap(cubemap_texs, FilteringType::BILINEAR);
 
 	while (!g_engine.m_stop)
 	{
