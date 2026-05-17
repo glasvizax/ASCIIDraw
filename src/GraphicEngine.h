@@ -351,7 +351,7 @@ void executeRenderingPipeline(
 					{
 						float correct_z = 1.0f / (w0_recip * alpha + w1_recip * beta + w2_recip * gamma);
 						char current_symbol;
-#ifdef ENABLE_BAD_SSAA
+#ifdef ENABLE_BAD_MSAA
 						float min = std::min({ alpha, beta, gamma });
 						if (min < 0.05f)
 						{

@@ -108,10 +108,21 @@ void ConsoleWindow::draw()
 	std::cout.write(m_main_framebuffer.getBuffer(), n);
 }
 
+void ConsoleWindow::draw(BroadcastExecutor& exec)
+{
+
+}
+
 void ConsoleWindow::clear()
 {
 	m_main_framebuffer.clear(m_clear_symbol);
 	m_z_framebuffer.clear(1.0f);
+}
+
+void ConsoleWindow::clear(BroadcastExecutor& exec)
+{
+	m_main_framebuffer.clear(m_clear_symbol, exec);
+	m_z_framebuffer.clear(1.0f, exec);
 }
 
 void ConsoleWindow::destroy() 

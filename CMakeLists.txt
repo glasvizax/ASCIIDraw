@@ -156,6 +156,7 @@ target_compile_definitions(
     PRIVATE
         $<$<CONFIG:Debug>:DATA_PATH="${DATA_DIR}">
         NOMINMAX
+        ENABLE_BAD_MSAA
 )
 
 include(add_targets_to_folder)

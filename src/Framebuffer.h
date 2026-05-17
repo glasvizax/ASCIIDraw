@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "Aliases.h"
+#include "BroadcastExecutor.h"
 
 template<typename T>
 class Framebuffer
@@ -59,6 +60,16 @@ public:
         {
             std::memset(m_buffer.data(), clear_value, m_buff_size);
         }
+    }
+
+    void clear(T clear_value, BroadcastExecutor& exec)
+    {
+        exec.foreachSync([clear_value](T& elem, uint idx)
+            {
+                elem = clear_value;
+            },
+            std::span(m_buffer)
+        );
     }
 };
 

@@ -25,7 +25,10 @@ public:
 	void destroy();
 	
 	void draw();
+	void draw(BroadcastExecutor& exec);
+
 	void clear();
+	void clear(BroadcastExecutor& exec);
 	
 	wchar_t getLastInputKeyWChar();
 

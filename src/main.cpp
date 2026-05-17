@@ -53,9 +53,9 @@ int main(int argc, char* argv[])
 
 	//teapotScene();
 
-	//osakaScene();
+	osakaScene();
 	
-	landscapeScene();
+	//landscapeScene();
 }
 
 void osakaScene()
@@ -308,7 +308,7 @@ void landscapeScene()
 
 	while (!g_engine.m_stop)
 	{
-		g_engine.m_main_window.clear();
+		g_engine.m_main_window.clear(*g_engine.m_executor);
 	
 		auto time = chrono::steady_clock::now();
 		float delta = chrono::duration<float>(time - last_time).count();
